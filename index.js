@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.13';
+const VERSION = '0.5.14';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;

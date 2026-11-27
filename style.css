@@ -224,21 +224,14 @@
     white-space: nowrap;
 }
 .th-logrow .th-chev { flex: none; font-size: 11px; color: var(--th-muted); }
-/* An opened turn is one card: darker title row, lighter details. */
-.th-logitem.th-open {
-    margin: 4px -4px;
+/* An opened turn keeps its title row as is; only the details sit in their own box. */
+.th-logdetail {
+    margin: 0 4px 8px;
+    padding: 8px 10px;
     border: 1px solid var(--th-border);
     border-radius: 8px;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--th-fg) 5%, transparent);
+    background: color-mix(in srgb, var(--th-fg) 6%, transparent);
 }
-.th-logitem.th-open + .th-logitem { border-top: 0; }
-.th-logitem.th-open > .th-logrow {
-    padding: 8px;
-    background: color-mix(in srgb, var(--th-fg) 10%, transparent);
-}
-.th-logitem.th-open .th-logtag { background: color-mix(in srgb, var(--th-bg) 70%, transparent); }
-.th-logdetail { padding: 6px 10px 8px 14px; }
 .th-logdetail .th-stack { margin: 0 0 4px; }
 .th-logdetail .th-rows { margin-top: 6px; }
 .th-logmain { flex: 1; min-width: 0; }
