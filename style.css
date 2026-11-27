@@ -300,6 +300,8 @@
 .th-check input { width: 18px; height: 18px; flex: none; margin: 0; }
 .th-hint { margin-top: -6px; padding-left: 28px; }
 .th-field { display: flex; flex-direction: column; gap: 4px; }
+.th-export { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+.th-export .th-btns { margin-top: 0; }
 .th-select {
     appearance: none;
     -webkit-appearance: none;
@@ -411,7 +413,7 @@
 .th-panel .inline-drawer-content { display: flex; flex-direction: column; gap: 4px; }
 .th-p-hint { opacity: 0.8; }
 .th-p-stages { display: flex; gap: 6px; }
-.th-p-stages input { flex: 1; min-width: 0; }
+.th-p-stages input, .th-p-stages select { flex: 1; min-width: 0; }
 .th-p-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .th-p-row .menu_button { white-space: nowrap; }
 

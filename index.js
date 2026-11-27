@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.18';
+const VERSION = '0.5.19';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -43,7 +43,13 @@ const DEFAULTS = Object.freeze({
     showEstimate: true,
     logSize: 50,
     stages: [50, 85, 95],
+    exportScope: 'chat',
+    exportWhat: 'all',
+    exportNames: true,
+    exportModels: true,
 });
+const EXPORT_SCOPES = ['chat', 'all'];
+const EXPORT_WHATS = ['all', 'chat', 'side'];
 
 const COLORS = {
     preset: '#7F77DD',
@@ -184,6 +190,10 @@ function loadSettings() {
     if (!THEMES.includes(s.theme)) s.theme = DEFAULTS.theme;
     if (!HOUSE_NUMS.includes(s.houseNum)) s.houseNum = DEFAULTS.houseNum;
     s.mainWalk = s.mainWalk !== false;
+    if (!EXPORT_SCOPES.includes(s.exportScope)) s.exportScope = DEFAULTS.exportScope;
+    if (!EXPORT_WHATS.includes(s.exportWhat)) s.exportWhat = DEFAULTS.exportWhat;
+    s.exportNames = s.exportNames !== false;
+    s.exportModels = s.exportModels !== false;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -1620,6 +1630,135 @@ function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
 
+function exportScopeOptions() {
+    return EXPORT_SCOPES.map(v => [v, t('exp_scope_' + v)]);
+}
+
+function exportWhatOptions() {
+    return EXPORT_WHATS.map(v => [v, t('exp_what_' + v)]);
+}
+
+// ---------- data export (CSV, numbers and names only) ----------
+
+/** Every chat on this device that has a turn log or side calls. The open chat uses what is in memory. */
+function exportChats() {
+    const ids = new Set();
+    if (settings.exportScope === 'chat') {
+        if (state.chatId) ids.add(state.chatId);
+    } else {
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i) || '';
+                if (k.startsWith(LOG_PREFIX)) ids.add(k.slice(LOG_PREFIX.length));
+                else if (k.startsWith(SIDE_PREFIX)) ids.add(k.slice(SIDE_PREFIX.length));
+            }
+        } catch { /* ignore */ }
+        if (state.chatId) ids.add(state.chatId);
+    }
+    return [...ids].map(id => ({
+        id,
+        turns: id === state.chatId ? state.log : loadLog(id),
+        side: id === state.chatId ? state.side : loadSide(id),
+    }));
+}
+
+function csvCell(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\r\n]/.test(s) || /^[=+\-@\t]/.test(s) ? `"${(/^[=+\-@\t]/.test(s) ? "'" : '') + s.replace(/"/g, '""')}"` : s;
+}
+
+function csvTime(ms) {
+    const d = new Date(ms);
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** Replaces names with "Chat 1", "Model 2"... in the order they first show up. */
+function nameHider(keep, key) {
+    const seen = new Map();
+    return (name) => {
+        if (!name) return '';
+        if (keep) return name;
+        if (!seen.has(name)) seen.set(name, t(key, { n: seen.size + 1 }));
+        return seen.get(name);
+    };
+}
+
+function buildCsvRows() {
+    const what = settings.exportWhat;
+    const sdMap = what !== 'side' ? sendDateMap() : new Map();
+    const rows = [];
+    for (const c of exportChats()) {
+        if (what !== 'side') {
+            for (const r of c.turns) {
+                if (!r || r.void || r.est) continue;
+                const tag = c.id === state.chatId ? msgTag(r, sdMap) : (Number.isInteger(r.mid) ? { n: r.mid, s: r.sw || 0 } : null);
+                const u = r.usage || null;
+                const counted = r.out ? (r.out.text || 0) + (r.out.reason || 0) : null;
+                const inTok = Number.isFinite(u?.input) ? u.input : r.total;
+                const outTok = Number.isFinite(u?.output) ? u.output : counted;
+                const p = r.parts || {};
+                rows.push({ t: r.t, cells: [
+                    t('pane_chat'), c.id, csvTime(r.t),
+                    tag ? (tag.gone ? t('log_mid_gone') : tag.n) : '', tag && tag.s ? tag.s : '',
+                    r.cardName || '', '', r.profile || '', r.model || '',
+                    inTok, outTok, Number.isFinite(u?.input) && Number.isFinite(u?.output) ? '' : 'y',
+                    u?.cached ?? '', u?.reason ?? '',
+                    r.total, r.max, r.reply,
+                    p.preset, p.card, p.persona, p.examples, p.wi, p.ext, p.history,
+                    r.hist?.inc ?? '', r.hist?.all ?? '', r.hist?.hidden ?? '',
+                    r.cache?.state || '',
+                ] });
+            }
+        }
+        if (what !== 'chat') {
+            for (const r of c.side) {
+                if (!r) continue;
+                const est = r.est || !Number.isFinite(r.out);
+                const who = r.src ? (folderLabel(r.src) || r.name || folderPlain(r.src)) : t('side_unknown');
+                rows.push({ t: r.t, cells: [
+                    t('pane_side'), c.id, csvTime(r.t), '', '',
+                    '', who, '', r.model || '',
+                    r.in, Number.isFinite(r.out) ? r.out : '', est ? 'y' : '',
+                    ...Array(16).fill(''),
+                ] });
+            }
+        }
+    }
+    rows.sort((a, b) => a.t - b.t);
+    // Hidden names are numbered in time order, so "Chat 1" is the first chat in the file.
+    const hide = [[1, nameHider(settings.exportNames, 'exp_anon_chat')], [5, nameHider(settings.exportNames, 'exp_anon_char')],
+        [7, nameHider(settings.exportModels, 'exp_anon_profile')], [8, nameHider(settings.exportModels, 'exp_anon_model')]];
+    return rows.map(r => { for (const [i, f] of hide) r.cells[i] = f(r.cells[i]); return r.cells; });
+}
+
+function exportCsv() {
+    let rows = [];
+    try { rows = buildCsvRows(); } catch (e) { console.warn('[Tokenhound] export', e); }
+    if (!rows.length) { toast('info', t('exp_none')); return; }
+    const head = t('exp_head').split('|');
+    const text = '\uFEFF' + [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    const file = `tokenhound-${settings.exportScope === 'all' ? 'all' : 'chat'}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`;
+    try {
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        toast('success', t('exp_done', { n: rows.length }));
+    } catch (e) {
+        console.warn('[Tokenhound] export', e);
+        toast('warning', t('exp_fail'));
+    }
+}
+
 function renderQuickSettings() {
     const check = (id, val, label) => `<label class="th-check"><input type="checkbox" id="${id}"${val ? ' checked' : ''}><span>${esc(label)}</span></label>`;
     return '<div class="th-settings">'
@@ -1638,6 +1777,13 @@ function renderQuickSettings() {
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
         + `<label class="th-field"><span>${esc(t('set_theme'))}</span>${selectHtml('th-q-theme', settings.theme, themeOptions())}</label>`
         + `<label class="th-field"><span>${esc(t('set_lang'))}</span>${selectHtml('th-q-lang', settings.lang, langOptions())}</label>`
+        + `<div class="th-export"><b>${esc(t('exp_title'))}</b>`
+        + `<label class="th-field"><span>${esc(t('exp_scope'))}</span>${selectHtml('th-q-exscope', settings.exportScope, exportScopeOptions())}</label>`
+        + `<label class="th-field"><span>${esc(t('exp_what'))}</span>${selectHtml('th-q-exwhat', settings.exportWhat, exportWhatOptions())}</label>`
+        + check('th-q-exnames', settings.exportNames, t('exp_names'))
+        + check('th-q-exmodels', settings.exportModels, t('exp_models'))
+        + `<div class="th-btns th-exbtns"><button class="th-btn" data-act="export">${esc(t('exp_btn'))}</button></div>`
+        + `<div class="th-small th-muted">${esc(t('exp_hint'))}</div></div>`
         + `<div class="th-small th-muted">${esc(t('set_more'))}</div>`
         + `<div class="th-small th-muted">${esc(t('set_version', { v: VERSION }))}</div>`
         + '</div>';
@@ -1778,6 +1924,7 @@ function onWindowClick(e) {
             break;
         case 'log': state.view = 'log'; render(); break;
         case 'copy': copySummary(); break;
+        case 'export': exportCsv(); break;
         case 'estimate': runEstimate(); break;
         case 'estimate-off': state.estimate = null; render(); break;
     }
@@ -1800,6 +1947,10 @@ function onWindowChange(e) {
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-theme': settings.theme = el.value; break;
         case 'th-q-lang': settings.lang = el.value; break;
+        case 'th-q-exscope': settings.exportScope = el.value; break;
+        case 'th-q-exwhat': settings.exportWhat = el.value; break;
+        case 'th-q-exnames': settings.exportNames = el.checked; break;
+        case 'th-q-exmodels': settings.exportModels = el.checked; break;
         default: return;
     }
     saveSettings();
@@ -2452,6 +2603,12 @@ ${chk('th-p-estimate', t('set_estimate'))}
 <label>${esc(t('set_stage'))}</label>
 <div class="th-p-stages"><input id="th-p-s1" class="text_pole" type="number" min="1" max="100" inputmode="numeric"><input id="th-p-s2" class="text_pole" type="number" min="1" max="100" inputmode="numeric"><input id="th-p-s3" class="text_pole" type="number" min="1" max="100" inputmode="numeric"></div>
 <small class="th-p-hint">${esc(t('set_stage_hint'))}</small>
+<label>${esc(t('exp_title'))}</label>
+<div class="th-p-stages"><select id="th-p-exscope" class="text_pole" title="${esc(t('exp_scope'))}" aria-label="${esc(t('exp_scope'))}">${exportScopeOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select><select id="th-p-exwhat" class="text_pole" title="${esc(t('exp_what'))}" aria-label="${esc(t('exp_what'))}">${exportWhatOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
+${chk('th-p-exnames', t('exp_names'))}
+${chk('th-p-exmodels', t('exp_models'))}
+<div class="th-p-row"><div id="th-p-export" class="menu_button">${esc(t('exp_btn'))}</div></div>
+<small class="th-p-hint">${esc(t('exp_hint'))}</small>
 <div class="th-p-row"><div id="th-p-clear" class="menu_button">${esc(t('set_clear_chat'))}</div><div id="th-p-clearall" class="menu_button">${esc(t('set_clear_all'))}</div></div>
 ${chk('th-p-sync', t('set_sync'))}
 <small class="th-p-hint">${esc(t('set_sync_hint'))}</small>
@@ -2479,6 +2636,10 @@ function syncPanel() {
     $('th-p-theme').value = settings.theme;
     $('th-p-lang').value = settings.lang;
     $('th-p-logsize').value = String(settings.logSize);
+    $('th-p-exscope').value = settings.exportScope;
+    $('th-p-exwhat').value = settings.exportWhat;
+    $('th-p-exnames').checked = settings.exportNames;
+    $('th-p-exmodels').checked = settings.exportModels;
     $('th-p-s1').value = settings.stages[0];
     $('th-p-s2').value = settings.stages[1];
     $('th-p-s3').value = settings.stages[2];
@@ -2516,6 +2677,10 @@ function buildPanel() {
             case 'th-p-theme': settings.theme = el.value; break;
             case 'th-p-lang': settings.lang = el.value; saveSettings(); buildPanel(); rebuildMenu(); render(); return;
             case 'th-p-logsize': settings.logSize = Number(el.value) || 50; saveLog(); break;
+            case 'th-p-exscope': settings.exportScope = el.value; break;
+            case 'th-p-exwhat': settings.exportWhat = el.value; break;
+            case 'th-p-exnames': settings.exportNames = el.checked; break;
+            case 'th-p-exmodels': settings.exportModels = el.checked; break;
             case 'th-p-s1': case 'th-p-s2': case 'th-p-s3': {
                 const vals = ['th-p-s1', 'th-p-s2', 'th-p-s3'].map(id => Math.min(100, Math.max(1, Number(document.getElementById(id).value) || 0)));
                 vals.sort((a, b) => a - b);
@@ -2539,6 +2704,7 @@ function buildPanel() {
             toast('success', t('pos_reset'));
             return;
         }
+        if (id === 'th-p-export') { exportCsv(); return; }
         if (id !== 'th-p-clear' && id !== 'th-p-clearall') return;
         const c = ctx();
         const msg = id === 'th-p-clear' ? t('confirm_clear_chat') : t('confirm_clear_all');
