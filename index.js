@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.15';
+const VERSION = '0.5.16';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -75,6 +75,7 @@ const state = {
     chatId: null,
     log: [],            // turn records for the current chat
     latest: null,       // last real turn
+    contFrom: null,     // send time of the message a "continue" is about to change
     estimate: null,     // last estimate (not saved)
     current: null,      // generation being watched
     generating: false,
@@ -786,6 +787,15 @@ async function attachReply(rec, messageId) {
         // Message number as SillyTavern shows it (#N), plus which swipe it was.
         if (Number.isInteger(Number(messageId))) rec.mid = Number(messageId);
         if (Array.isArray(m.swipes) && m.swipes.length > 1 && Number.isInteger(m.swipe_id)) rec.sw = m.swipe_id + 1;
+        // The reply's send time, to find the message again after earlier ones are deleted.
+        if (m.send_date) {
+            const sd = String(m.send_date);
+            const old = state.contFrom;
+            state.contFrom = null;
+            // "Continue" gives the message a new send time: move older turns along with it.
+            if (old && old !== sd) for (const r of state.log) if (r.sd === old) r.sd = sd;
+            rec.sd = sd;
+        }
         rec.out = { text: await count(m.mes), reason: await count(m.extra?.reasoning || '') };
     } catch { /* ignore */ }
     rec.awaitingReply = false;
@@ -882,6 +892,11 @@ function onGenerationStarted(type, _params, dryRun) {
     if (type === 'quiet') return; // background calls from other features
     if (dryRun && !state.estimateRunning) return; // SillyTavern's own dry runs
     if (!dryRun) state.generating = true;
+    if (!dryRun) {
+        const chat = ctx().chat;
+        const last = Array.isArray(chat) ? chat[chat.length - 1] : null;
+        state.contFrom = type === 'continue' && last && !last.is_user && last.send_date ? String(last.send_date) : null;
+    }
     state.current = { type, est: !!dryRun, wi: [], chatId: ctx().getCurrentChatId?.() || null, done: false, pendingReply: null };
 }
 
@@ -1245,15 +1260,59 @@ function renderButtons() {
     return `<div class="th-btns"><button class="th-btn" data-act="log">${esc(t('btn_log'))}</button>${est}<button class="th-btn" data-act="copy">${esc(t('btn_copy'))}</button></div>`;
 }
 
+/** Send time -> where that message (and swipe) is in the chat now. */
+function sendDateMap() {
+    const chat = ctx().chat;
+    const map = new Map();
+    if (!Array.isArray(chat)) return map;
+    const add = (sd, i, s) => {
+        if (!sd) return;
+        const k = String(sd);
+        const a = map.get(k);
+        if (a) a.push([i, s]); else map.set(k, [[i, s]]);
+    };
+    chat.forEach((m, i) => {
+        if (!m || m.is_user) return;
+        const many = Array.isArray(m.swipes) && m.swipes.length > 1;
+        if (many && Array.isArray(m.swipe_info)) {
+            m.swipe_info.forEach((si, j) => add(si?.send_date, i, j + 1));
+            if (Number.isInteger(m.swipe_id)) add(m.send_date, i, m.swipe_id + 1);
+        } else add(m.send_date, i, 0);
+    });
+    return map;
+}
+
+function tagHtml(m) {
+    if (!m) return '';
+    if (m.gone) return `<span class="th-logtag th-gone">${esc(t('log_mid_gone'))}</span>`;
+    return `<span class="th-logtag">${esc(m.s ? t('log_mid_swipe', { n: m.n, s: m.s }) : t('log_mid', { n: m.n }))}</span>`;
+}
+
+/** The message number to show for a turn now: {n, s} or {gone: true}, or null. */
+function msgTag(r, map) {
+    if (!Number.isInteger(r.mid)) return null;
+    if (!r.sd || !map.size) return { n: r.mid, s: r.sw || 0 }; // older turns: as saved
+    const hits = map.get(r.sd);
+    if (!hits) return { gone: true };
+    // Deleting only moves numbers down, so prefer the nearest one at or below the saved number.
+    let best = null;
+    for (const h of hits) {
+        const below = h[0] <= r.mid;
+        if (!best || (below && (!best.below || h[0] > best.h[0])) || (!below && !best.below && h[0] < best.h[0])) best = { h, below };
+    }
+    return { n: best.h[0], s: best.h[1] };
+}
+
 function renderLog() {
     const list = shownLog();
     if (!list.length) return `<div class="th-muted th-pad">${esc(t('log_empty'))}</div>`;
+    const sdMap = sendDateMap();
     return '<div class="th-log">' + list.map((r, i) => {
         const pct = pctOf(r);
         const open = state.logOpen.has(r.t);
         const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         let html = `<div class="th-logitem${open ? ' th-open' : ''}">`
-            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-logtop"><span class="th-ellipsis th-logtitle">${esc(t('log_item', { total: fmt(r.total), pct }))}</span>${Number.isInteger(r.mid) ? `<span class="th-logtag">${esc(r.sw ? t('log_mid_swipe', { n: r.mid, s: r.sw }) : t('log_mid', { n: r.mid }))}</span>` : ''}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
+            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-logtop"><span class="th-ellipsis th-logtitle">${esc(t('log_item', { total: fmt(r.total), pct }))}</span>${tagHtml(msgTag(r, sdMap))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
             + `<div class="th-mini">${barSegments(r)}</div><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i></div>`;
         if (open) html += logDetailHtml(r, list[i - 1] || null);
         return html + '</div>';

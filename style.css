@@ -223,6 +223,7 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+.th-logtag.th-gone { opacity: 0.6; font-style: italic; }
 .th-logrow .th-chev { flex: none; font-size: 11px; color: var(--th-muted); }
 /* An opened turn keeps its title row as is; only the details sit in their own box. */
 .th-logdetail {
