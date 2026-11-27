@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.21';
+const VERSION = '0.5.22';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -2282,7 +2282,7 @@ function renderCard() {
 
 // ---------- wandering hound (walks along the top edge of the input) ----------
 
-const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0, hopUntil: 0 };
+const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0, hopUntil: 0, pressed: 0 };
 const HOP_MS = 450;
 // Phone: 1.25x. PC: 2x so the hound isn't tiny on a wide screen (2x keeps every dot the same size).
 // Donuts grow by the same ratio.
@@ -2337,7 +2337,8 @@ function walkStep() {
         if (walk.timer) { clearInterval(walk.timer); walk.timer = null; }
         return;
     }
-    if (Date.now() < walk.hopUntil) return; // stand still mid-hop, then walk on
+    // Stand still mid-hop, and while a finger is on the hound: redrawing it under the finger would swallow the tap.
+    if (Date.now() < walk.hopUntil || Date.now() < walk.pressed) return;
     const rec = shown();
     const pct = pctOf(rec);
     const stage = stageOf(pct);
@@ -2391,11 +2392,10 @@ function walkStep() {
     if (spin) spin.style.transform = `rotate(${Math.round((walk.roll / (toy.size / 2)) * 180 / Math.PI)}deg)`;
 }
 
-// A tap makes the wandering hound hop (with its donut when riding it; a rolled donut stays on the ground).
+// A tap makes the wandering hound hop; its donut (rolled or ridden) stays where it is.
 function walkerHop(dog) {
     if (!dog || reducedMotion()) return;
     dog.style.setProperty('--th-cell', `${walkDims().scale}px`);
-    dog.dataset.hop = walkToy() && settings.walkToy === 'ride' ? 'all' : 'dog';
     walk.hopUntil = Date.now() + HOP_MS;
     restartHop(dog);
 }
@@ -2422,7 +2422,11 @@ function renderWalker() {
         dog.className = 'th-walker';
         dog.setAttribute('role', 'button');
         dog.tabIndex = 0;
-        dog.addEventListener('click', () => { onHoundTap(dog); walkerHop(dog); });
+        dog.addEventListener('click', () => { walk.pressed = 0; onHoundTap(dog); walkerHop(dog); });
+        // Hold still while pressed (up to 1.5 s, so a lost release never freezes it).
+        dog.addEventListener('pointerdown', () => { walk.pressed = Date.now() + 1500; });
+        const release = () => { walk.pressed = 0; };
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => dog.addEventListener(n, release));
         dog.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dog.click(); } });
         lane.appendChild(dog);
         // With the bar on too, the hound walks on top of the bar.
@@ -2572,10 +2576,10 @@ function bindHouseDrag(el) {
     });
 }
 
-// A tap makes the resting hound hop out of its spot; a sleeping one wakes up (peeks) first.
+// A tap makes the resting hound hop; lying down or asleep, it gets up (peeks) first.
 function houseHop(el) {
     if (!el || reducedMotion()) return;
-    if (houseFrame() === 'sleep') {
+    if (houseFrame() !== 'peek') { // lying or asleep: get up first
         house.since = Date.now();
         drawHouse();
         scheduleHouse();
