@@ -603,5 +603,9 @@
 .th-house-sign.th-pct4 { color: #C83A39; }
 .th-house-donut { position: relative; display: block; flex: none; width: 26px; height: 26px; }
 .th-house-donut .th-ring-num { font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* PC: the house is drawn at 2x, so the nameplate and pillow number grow too */
+.th-house-pc { padding-top: 11px; }
+.th-house-pc .th-house-sign { top: -8px; min-width: 28px; font-size: 11px; line-height: 13px; }
+.th-house-pc .th-house-donut .th-ring-num { font-size: 13px; }
 @media (hover: hover) { .th-house:hover .th-house-bubble { opacity: 1; } }
 .th-house:focus-visible .th-house-bubble { opacity: 1; }

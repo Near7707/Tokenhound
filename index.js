@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.7';
+const VERSION = '0.5.8';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1848,8 +1848,10 @@ function renderWalker() {
 
 // ---------- resting hound (a doghouse that stays put; drag to move) ----------
 
-const HOUSE_SCALE = 1.5;
-const HOUSE_DONUT = 26;
+// Phone: 1.5x. PC: 2x (bigger screen, every dot the same size). The donut pillow grows with it.
+function houseDims() {
+    return isMobile() ? { scale: 1.5, donut: 26, ring: 5, pc: false } : { scale: 2, donut: 35, ring: 7, pc: true };
+}
 const house = { timer: null, frame: 'peek', since: 0, bubbleUntil: 0, lastT: null, key: '' };
 // Peeks out, lies down, then dozes off. A finished reply wakes it up again.
 const HOUSE_STEPS = [['peek', 6000], ['rest', 25000], ['sleep', 0]];
@@ -1896,18 +1898,19 @@ function drawHouse() {
     const donut = settings.houseNum === 'donut';
     const bubble = !donut && Date.now() < house.bubbleUntil;
     const label = rec ? `${pct}${rec.est ? '~' : ''}` : '—';
-    const key = `${frame}:${donut}:${bubble}:${label}:${stage}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
+    const dims = houseDims();
+    const key = `${frame}:${donut}:${bubble}:${dims.scale}:${label}:${stage}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
     if (key === house.key) return;
     house.key = key;
     el.title = `${t('open')} · ${t('stage_' + stage)}`;
     el.setAttribute('aria-label', el.title);
     const num = `<span class="th-ring-num${pctClass(stage)}">${label}</span>`;
-    let html = `<span class="th-house-art">${houseSvg(frame, HOUSE_SCALE)}`;
+    let html = `<span class="th-house-art">${houseSvg(frame, dims.scale)}`;
     if (!donut) html += `<span class="th-house-sign${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
     html += '</span>';
-    if (donut) html += `<span class="th-house-donut">${donutSvg(rec, HOUSE_DONUT, 5, true)}${num}</span>`;
+    if (donut) html += `<span class="th-house-donut" style="width:${dims.donut}px;height:${dims.donut}px">${donutSvg(rec, dims.donut, dims.ring, true)}${num}</span>`;
     else html += `<span class="th-walk-bubble th-house-bubble${bubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
-    el.className = `th-house${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
+    el.className = `th-house${dims.pc ? ' th-house-pc' : ''}${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
     el.innerHTML = html;
 }
 
