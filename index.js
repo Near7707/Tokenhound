@@ -2,10 +2,10 @@
 // Read-only: it never adds anything to the prompt and never edits chats or cards.
 
 import { STRINGS } from './i18n.js';
-import { houndSvg, houseSvg, houndPartSvg } from './sprites.js';
+import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.20';
+const VERSION = '0.5.21';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1834,7 +1834,7 @@ function openWindow() {
     ensureWindow();
     render();
     sizeWindow();
-    logoWalk();
+    logoWalk(true);
     pullLog();
 }
 
@@ -1869,14 +1869,18 @@ function paintLogo(el, stage, scale) {
     el.innerHTML = logoHtml(stage, scale);
 }
 
-function logoWalk() {
+function logoWalk(first = false) {
     const el = document.querySelector('#th-window .th-logo');
     clearTimeout(logoTimer);
-    if (!el || reducedMotion()) return;
-    el.classList.add('th-walking');
+    logoTimer = null;
+    if (!el || !state.open || reducedMotion()) return;
+    // Later strolls: only an easy or sniffing hound gets up; a panting or sleepy one stays put.
+    const stage = Number(String(el.dataset.key || '1').split(':')[0]);
+    if (first || stage <= 2) el.classList.add('th-walking');
     logoTimer = setTimeout(() => {
-        logoTimer = null;
         document.querySelector('#th-window .th-logo')?.classList.remove('th-walking');
+        // Every 20-40 s, a short walk again while the window stays open.
+        logoTimer = setTimeout(logoWalk, 20000 + Math.random() * 20000);
     }, LOGO_WALK_MS);
 }
 
@@ -2278,7 +2282,8 @@ function renderCard() {
 
 // ---------- wandering hound (walks along the top edge of the input) ----------
 
-const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0 };
+const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0, hopUntil: 0 };
+const HOP_MS = 450;
 // Phone: 1.25x. PC: 2x so the hound isn't tiny on a wide screen (2x keeps every dot the same size).
 // Donuts grow by the same ratio.
 const WALK_PHONE = {
@@ -2332,6 +2337,7 @@ function walkStep() {
         if (walk.timer) { clearInterval(walk.timer); walk.timer = null; }
         return;
     }
+    if (Date.now() < walk.hopUntil) return; // stand still mid-hop, then walk on
     const rec = shown();
     const pct = pctOf(rec);
     const stage = stageOf(pct);
@@ -2385,6 +2391,23 @@ function walkStep() {
     if (spin) spin.style.transform = `rotate(${Math.round((walk.roll / (toy.size / 2)) * 180 / Math.PI)}deg)`;
 }
 
+// A tap makes the wandering hound hop (with its donut when riding it; a rolled donut stays on the ground).
+function walkerHop(dog) {
+    if (!dog || reducedMotion()) return;
+    dog.style.setProperty('--th-cell', `${walkDims().scale}px`);
+    dog.dataset.hop = walkToy() && settings.walkToy === 'ride' ? 'all' : 'dog';
+    walk.hopUntil = Date.now() + HOP_MS;
+    restartHop(dog);
+}
+
+function restartHop(el) {
+    el.classList.remove('th-hop');
+    void el.offsetWidth; // a second tap mid-air starts a new hop
+    el.classList.add('th-hop');
+    clearTimeout(el._thHop);
+    el._thHop = setTimeout(() => el.classList.remove('th-hop'), HOP_MS);
+}
+
 function renderWalker() {
     const anchor = document.getElementById('send_form');
     if (!anchor) return;
@@ -2399,7 +2422,7 @@ function renderWalker() {
         dog.className = 'th-walker';
         dog.setAttribute('role', 'button');
         dog.tabIndex = 0;
-        dog.addEventListener('click', () => onHoundTap(dog));
+        dog.addEventListener('click', () => { onHoundTap(dog); walkerHop(dog); });
         dog.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dog.click(); } });
         lane.appendChild(dog);
         // With the bar on too, the hound walks on top of the bar.
@@ -2483,12 +2506,14 @@ function drawHouse() {
     el.title = `${t('open')} · ${t('stage_' + stage)}`;
     el.setAttribute('aria-label', el.title);
     const num = `<span class="th-ring-num${pctClass(stage)}">${label}</span>`;
-    let html = `<span class="th-house-art">${houseSvg(frame, dims.scale)}`;
+    const layers = houseLayersSvg(frame, dims.scale);
+    let html = `<span class="th-house-art">${layers.house}<span class="th-house-dog">${layers.dog}</span>`;
     if (!donut) html += `<span class="th-house-sign${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
     html += '</span>';
     if (donut) html += `<span class="th-house-donut" style="width:${dims.donut}px;height:${dims.donut}px">${donutSvg(rec, dims.donut, dims.ring, true)}${num}</span>`;
     else html += `<span class="th-walk-bubble th-house-bubble${bubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
-    el.className = `th-house${dims.pc ? ' th-house-pc' : ''}${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
+    el.className = `th-house${dims.pc ? ' th-house-pc' : ''}${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}${el.classList.contains('th-hop') ? ' th-hop' : ''}`;
+    el.style.setProperty('--th-cell', `${dims.scale}px`);
     el.innerHTML = html;
 }
 
@@ -2543,7 +2568,19 @@ function bindHouseDrag(el) {
     el.addEventListener('click', (e) => {
         if (moved) { moved = false; e.preventDefault(); return; }
         onHoundTap(el);
+        houseHop(el);
     });
+}
+
+// A tap makes the resting hound hop out of its spot; a sleeping one wakes up (peeks) first.
+function houseHop(el) {
+    if (!el || reducedMotion()) return;
+    if (houseFrame() === 'sleep') {
+        house.since = Date.now();
+        drawHouse();
+        scheduleHouse();
+    }
+    restartHop(el);
 }
 
 function renderHouse() {

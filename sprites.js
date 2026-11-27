@@ -150,6 +150,38 @@ function buildParts(stages) {
 const STAGES = build();
 const WALK = buildWalk();
 const PARTS = buildParts(STAGES);
+
+// The doghouse alone, so the hound can hop while the house stays put.
+const HOUSE_EMPTY = [
+    '......kk',
+    '......kk',
+    '....kkwwkk',
+    '..kkwwwwwwkk',
+    'kkwwwwwwwwwwkk',
+    'kkkkkkkkkkkkkk',
+    '.kwwwwwwwwwwk',
+    '.kwwwwwwwwwwk',
+    '.kwwwkkkkwwwk',
+    '.kwwkkkkkkwwk',
+    '.kwwkkkkkkwwk',
+    '.kwwkkkkkkwwk',
+    '.kwwkkkkkkwwk',
+    '.kwwkkkkkkwwk',
+    '.kwwkkkkkkwwk',
+    'kkkkkkkkkkkkkk',
+].map(r => r.padEnd(W, '.'));
+
+// The hound's dots in a doghouse scene: whatever differs from the empty house,
+// plus its back edge where it lies against the wall (same color as the wall).
+function houseDog(frame) {
+    const rows = HOUSE[frame] || HOUSE.rest;
+    return rows.map((line, r) => [...line.padEnd(W, '.')].map((ch, c) => {
+        if (ch === '.') return '.';
+        const lying = frame !== 'peek' && c === 12 && r >= 10 && r <= 13;
+        return ch !== HOUSE_EMPTY[r][c] || lying ? ch : '.';
+    }).join(''));
+}
+const HOUSE_DOG = { peek: houseDog('peek'), rest: houseDog('rest'), sleep: houseDog('sleep') };
 const cache = new Map();
 
 /**
@@ -181,6 +213,16 @@ export function houndPartSvg(part, scale = 1) {
 export function houseSvg(frame = 'rest', scale = 1) {
     const rows = HOUSE[frame] || HOUSE.rest;
     return draw(`h${frame}:${scale}`, rows, scale);
+}
+
+/**
+ * Returns the doghouse scene in two layers (house, hound) so the hound can hop alone.
+ * @param {'peek'|'rest'|'sleep'} frame
+ * @param {number} scale pixels per grid cell
+ */
+export function houseLayersSvg(frame = 'rest', scale = 1) {
+    const f = HOUSE_DOG[frame] ? frame : 'rest';
+    return { house: draw(`he:${scale}`, HOUSE_EMPTY, scale), dog: draw(`hd${f}:${scale}`, HOUSE_DOG[f], scale) };
 }
 
 function draw(key, rows, scale) {

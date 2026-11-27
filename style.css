@@ -713,6 +713,15 @@
 .th-house.th-dragging { cursor: grabbing; opacity: 0.85; }
 .th-house-art { position: relative; display: block; }
 .th-house-art > svg { display: block; }
+.th-house-dog { position: absolute; left: 0; top: 0; display: block; }
+.th-house-dog > svg { display: block; }
+/* Tap to hop: the hound jumps (the house and a rolled donut stay on the ground) */
+.th-walker.th-hop .th-walk-dog,
+.th-walker.th-hop[data-hop="all"] .th-toy,
+.th-house.th-hop .th-house-dog { animation: th-hop 0.45s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    .th-walker .th-walk-dog, .th-walker .th-toy, .th-house-dog { animation: none !important; }
+}
 /* Nameplate hung on the roof, above the door (black and white like the hound) */
 .th-house-sign {
     position: absolute;
