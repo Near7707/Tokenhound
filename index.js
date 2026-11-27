@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.9';
+const VERSION = '0.5.10';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1280,14 +1280,14 @@ function renderQuickSettings() {
     return '<div class="th-settings">'
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
-        + (settings.display !== 'menu' ? check('th-q-mainwalk', settings.mainWalk, t('set_main_walk')) : '')
-        + check('th-q-bar', settings.barOn, t('set_bar'))
-        + (settings.barOn ? check('th-q-barhound', settings.barHound, t('set_bar_hound')) : '')
-        + (settings.barOn ? `<label class="th-field"><span>${esc(t('set_bar_tap'))}</span>${selectHtml('th-q-bartap', settings.barTap, tapOptions())}</label>` : '')
         + (settings.display === 'walk' ? `<label class="th-field"><span>${esc(t('set_walk_toy'))}</span>${selectHtml('th-q-toy', settings.walkToy, toyOptions())}</label>` : '')
         + (settings.display === 'house' ? `<label class="th-field"><span>${esc(t('set_house_num'))}</span>${selectHtml('th-q-housenum', settings.houseNum, houseNumOptions())}</label>` : '')
         + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
         + (settings.display !== 'menu' ? `<label class="th-field"><span>${esc(t('set_tap'))}</span>${selectHtml('th-q-tap', settings.tapOpens, tapOptions())}</label>` : '')
+        + (settings.display !== 'menu' ? check('th-q-mainwalk', settings.mainWalk, t('set_main_walk')) : '')
+        + check('th-q-bar', settings.barOn, t('set_bar'))
+        + (settings.barOn ? check('th-q-barhound', settings.barHound, t('set_bar_hound')) : '')
+        + (settings.barOn ? `<label class="th-field"><span>${esc(t('set_bar_tap'))}</span>${selectHtml('th-q-bartap', settings.barTap, tapOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
@@ -1705,13 +1705,13 @@ const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUnti
 // Donuts grow by the same ratio.
 const WALK_PHONE = {
     scale: 1.25,
-    nose: { size: 20, w: 4, font: 9 },
-    ride: { size: 30, w: 6, font: 11 },
+    nose: { size: 20, w: 3, font: 9 },
+    ride: { size: 28, w: 4, font: 11 },
 };
 const WALK_PC = {
     scale: 2,
-    nose: { size: 32, w: 6, font: 13 },
-    ride: { size: 38, w: 8, font: 14 },
+    nose: { size: 32, w: 5, font: 13 },
+    ride: { size: 38, w: 6, font: 14 },
 };
 
 function walkDims() {
@@ -1850,7 +1850,7 @@ function renderWalker() {
 
 // Phone: 1.5x. PC: 2x (bigger screen, every dot the same size). The donut pillow grows with it.
 function houseDims() {
-    return isMobile() ? { scale: 1.5, donut: 26, ring: 5, pc: false } : { scale: 2, donut: 35, ring: 7, pc: true };
+    return isMobile() ? { scale: 1.5, donut: 26, ring: 4, pc: false } : { scale: 2, donut: 35, ring: 5, pc: true };
 }
 const house = { timer: null, frame: 'peek', since: 0, bubbleUntil: 0, lastT: null, key: '' };
 // Peeks out, lies down, then dozes off. A finished reply wakes it up again.
@@ -2049,11 +2049,6 @@ function panelHtml() {
 ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
-${chk('th-p-mainwalk', t('set_main_walk'))}
-${chk('th-p-bar', t('set_bar'))}
-${chk('th-p-barhound', t('set_bar_hound'))}
-<label for="th-p-bartap">${esc(t('set_bar_tap'))}</label>
-<select id="th-p-bartap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-toy">${esc(t('set_walk_toy'))}</label>
 <select id="th-p-toy" class="text_pole">${toyOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-housenum">${esc(t('set_house_num'))}</label>
@@ -2062,6 +2057,11 @@ ${chk('th-p-barhound', t('set_bar_hound'))}
 <select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-tap">${esc(t('set_tap'))}</label>
 <select id="th-p-tap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+${chk('th-p-mainwalk', t('set_main_walk'))}
+${chk('th-p-bar', t('set_bar'))}
+${chk('th-p-barhound', t('set_bar_hound'))}
+<label for="th-p-bartap">${esc(t('set_bar_tap'))}</label>
+<select id="th-p-bartap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <small class="th-p-hint">${esc(t('set_display_hint'))}</small>
 <div class="th-p-row"><div id="th-p-resetpos" class="menu_button">${esc(t('set_reset_pos'))}</div></div>
 ${chk('th-p-usage', t('set_usage'))}
