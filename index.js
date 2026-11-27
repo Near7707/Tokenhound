@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.11';
+const VERSION = '0.5.12';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1250,7 +1250,7 @@ function renderLog() {
         const open = state.logOpen.has(r.t);
         const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         let html = `<div class="th-logitem${open ? ' th-open' : ''}">`
-            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-ellipsis">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
+            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), isMobile() ? 1 : 2)}<div class="th-logmain"><div class="th-ellipsis th-logtitle">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
             + `<div class="th-mini">${barSegments(r)}</div><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i></div>`;
         if (open) html += logDetailHtml(r, list[i - 1] || null);
         return html + '</div>';
@@ -1397,7 +1397,7 @@ function renderWindow() {
     closeBtn.setAttribute('aria-label', t('close'));
     closeBtn.title = t('close');
     const rec = shown();
-    win.querySelector('.th-logo').innerHTML = houndSvg(stageOf(pctOf(rec)), 1.25);
+    win.querySelector('.th-logo').innerHTML = houndSvg(stageOf(pctOf(rec)), isMobile() ? 1.25 : 2);
     title.textContent = state.view === 'settings' ? t('settings') : (state.view === 'log' ? t('btn_log') : t('title'));
     const scroll = body.scrollTop;
     body.innerHTML = state.view === 'settings' ? renderQuickSettings() : (state.view === 'log' ? renderLog() : renderMain());
