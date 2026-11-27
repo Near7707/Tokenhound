@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -15,6 +15,7 @@ const DISPLAYS = ['button', 'walk', 'menu'];
 const FAB_STYLES = ['line', 'ring', 'plain'];
 const TAP_OPENS = ['card', 'window'];
 const WALK_TOYS = ['off', 'nose', 'ride'];
+const THEMES = ['auto', 'light', 'dark'];
 const CARD_MIN_CHANGE = 50; // smaller changes are left out of the quick card
 const SERVER_PREFIX = 'tokenhound-';
 const SERVER_INDEX = 'tokenhound-index.json';
@@ -30,6 +31,7 @@ const DEFAULTS = Object.freeze({
     barTap: 'window',
     walkToy: 'off',
     lang: 'auto',
+    theme: 'auto',
     readUsage: true,
     serverSync: true,
     showEstimate: true,
@@ -166,6 +168,7 @@ function loadSettings() {
     if (!TAP_OPENS.includes(s.tapOpens)) s.tapOpens = DEFAULTS.tapOpens;
     if (!TAP_OPENS.includes(s.barTap)) s.barTap = DEFAULTS.barTap;
     if (!WALK_TOYS.includes(s.walkToy)) s.walkToy = DEFAULTS.walkToy;
+    if (!THEMES.includes(s.theme)) s.theme = DEFAULTS.theme;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -485,9 +488,44 @@ function makeLocator(texts) {
     };
 }
 
+// Installed extensions' names, read once from SillyTavern (read-only).
+let stExt = null;
+let extNames = null;
+let extNamesFrom = -1;
+
+async function loadStExtensions() {
+    try { stExt = await import('../../../extensions.js'); } catch { stExt = null; }
+}
+
+const squashName = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+function installedNames() {
+    const list = stExt?.extensionNames;
+    if (!Array.isArray(list)) return [];
+    if (extNames && extNamesFrom === list.length) return extNames;
+    const out = [];
+    for (const full of list) {
+        const folder = String(full).replace(/^third-party\//, '');
+        let shown = '';
+        try { shown = stExt.getExtensionManifest?.(full)?.display_name || ''; } catch { /* ignore */ }
+        const plain = folder.replace(/^(SillyTavern|ST)[-_ ]+/i, '');
+        const label = shown || plain;
+        for (const n of new Set([shown, folder, plain].map(squashName))) {
+            if (n.length >= 4 && n !== 'tokenhound') out.push({ n, label });
+        }
+    }
+    out.sort((a, b) => b.n.length - a.n.length);
+    extNames = out;
+    extNamesFrom = list.length;
+    return out;
+}
+
 function extLabel(key) {
     if (KNOWN_EXT[key]) return t(KNOWN_EXT[key]);
     if (key.startsWith('DEPTH_PROMPT')) return t('ext_char_note');
+    const sq = squashName(key.replace(/^\d+_/, ''));
+    const hit = sq && installedNames().find(e => sq.startsWith(e.n));
+    if (hit) return hit.label;
     return key.replace(/^\d+_/, '').replace(/[_-]+/g, ' ').trim() || key;
 }
 
@@ -1075,9 +1113,13 @@ function renderMain() {
     const pct = pctOf(rec);
     const stage = stageOf(pct);
     const free = Math.max(0, rec.max - rec.total - rec.reply);
-    const meta = [rec.profile, rec.model || t('no_model')].filter(Boolean).join(' · ');
+    const model = rec.model || t('no_model');
+    const meta = rec.profile
+        ? `<span class="th-meta-profile th-ellipsis">${esc(rec.profile)}</span><span class="th-meta-model th-ellipsis">${esc(model)}</span>`
+        : `<span class="th-meta-model th-ellipsis">${esc(model)}</span>`;
+    const metaTitle = [rec.profile, model].filter(Boolean).join(' · ');
     let html = '';
-    html += `<div class="th-meta th-ellipsis" title="${esc(meta)}">${esc(meta)}</div>`;
+    html += `<div class="th-meta" title="${esc(metaTitle)}">${meta}</div>`;
     if (rec.est) html += `<div class="th-badge">${esc(t('estimate_badge'))}</div>`;
     html += `<div class="th-total"><span class="th-big">${fmt(rec.total)}</span><span class="th-muted th-ellipsis">${esc(t('of_context', { max: fmt(rec.max), pct }))}</span></div>`;
     html += `<div class="th-stack">${barSegments(rec)}</div>`;
@@ -1175,9 +1217,10 @@ function renderMain() {
 }
 
 function renderButtons() {
-    const est = settings.showEstimate
-        ? `<button class="th-btn" data-act="estimate" ${state.estimateRunning ? 'aria-busy="true"' : ''}>${esc(state.estimateRunning ? t('estimating') : t('btn_estimate'))}</button>`
-        : '';
+    let est = '';
+    if (state.estimateRunning) est = `<button class="th-btn" data-act="estimate" aria-busy="true">${esc(t('estimating'))}</button>`;
+    else if (state.estimate) est = `<button class="th-btn" data-act="estimate-off">${esc(t('btn_estimate_off'))}</button>`;
+    else if (settings.showEstimate) est = `<button class="th-btn" data-act="estimate">${esc(t('btn_estimate'))}</button>`;
     return `<div class="th-btns"><button class="th-btn" data-act="log">${esc(t('btn_log'))}</button>${est}<button class="th-btn" data-act="copy">${esc(t('btn_copy'))}</button></div>`;
 }
 
@@ -1212,6 +1255,10 @@ function toyOptions() {
     return WALK_TOYS.map(v => [v, t('toy_' + v)]);
 }
 
+function themeOptions() {
+    return [['auto', t('theme_auto')], ['light', t('theme_light')], ['dark', t('theme_dark')]];
+}
+
 function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
@@ -1230,6 +1277,7 @@ function renderQuickSettings() {
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
+        + `<label class="th-field"><span>${esc(t('set_theme'))}</span>${selectHtml('th-q-theme', settings.theme, themeOptions())}</label>`
         + `<label class="th-field"><span>${esc(t('set_lang'))}</span>${selectHtml('th-q-lang', settings.lang, langOptions())}</label>`
         + `<div class="th-small th-muted">${esc(t('set_more'))}</div>`
         + `<div class="th-small th-muted">${esc(t('set_version', { v: VERSION }))}</div>`
@@ -1289,6 +1337,7 @@ function closeWindow() {
 function renderWindow() {
     const win = document.getElementById('th-window');
     if (!win || !state.open) return;
+    applyTheme();
     const body = win.querySelector('.th-body');
     const back = win.querySelector('[data-act="back"]');
     const title = win.querySelector('.th-title');
@@ -1341,6 +1390,7 @@ function onWindowClick(e) {
         case 'log': state.view = 'log'; render(); break;
         case 'copy': copySummary(); break;
         case 'estimate': runEstimate(); break;
+        case 'estimate-off': state.estimate = null; render(); break;
     }
 }
 
@@ -1357,6 +1407,7 @@ function onWindowChange(e) {
         case 'th-q-toy': settings.walkToy = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
+        case 'th-q-theme': settings.theme = el.value; break;
         case 'th-q-lang': settings.lang = el.value; break;
         default: return;
     }
@@ -1626,6 +1677,7 @@ function renderCard() {
     if (!anchor || !anchor.isConnected || !settings.enabled || state.open) { closeCard(); return; }
     el.setAttribute('aria-label', t('title'));
     el.innerHTML = cardHtml();
+    applyTheme();
     placeCard(el, anchor);
 }
 
@@ -1768,6 +1820,15 @@ function renderDisplay() {
     else if (mode === 'walk') renderWalker();
 }
 
+function applyTheme() {
+    for (const id of ['th-window', 'th-card']) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        el.classList.toggle('th-light', settings.theme === 'light');
+        el.classList.toggle('th-dark', settings.theme === 'dark');
+    }
+}
+
 function render() {
     try { renderDisplay(); } catch (e) { console.warn('[Tokenhound] display', e); }
     try { renderWindow(); } catch (e) { console.warn('[Tokenhound] window', e); }
@@ -1778,7 +1839,7 @@ function render() {
 
 function panelHtml() {
     const chk = (id, label) => `<label class="checkbox_label" for="${id}"><input type="checkbox" id="${id}"><span>${esc(label)}</span></label>`;
-    return `<div id="th-panel" class="th-panel"><div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>Tokenhound</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content">
+    return `<div id="th-panel" class="th-panel"><div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b class="th-panel-name">${houndImg(1, 0.75)}Tokenhound</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content">
 ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
@@ -1797,6 +1858,8 @@ ${chk('th-p-barhound', t('set_bar_hound'))}
 ${chk('th-p-usage', t('set_usage'))}
 <small class="th-p-hint">${esc(t('set_usage_hint'))}</small>
 ${chk('th-p-estimate', t('set_estimate'))}
+<label for="th-p-theme">${esc(t('set_theme'))}</label>
+<select id="th-p-theme" class="text_pole">${themeOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-lang">${esc(t('set_lang'))}</label>
 <select id="th-p-lang" class="text_pole">${langOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-logsize">${esc(t('set_log_size'))}</label>
@@ -1826,6 +1889,7 @@ function syncPanel() {
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
     $('th-p-estimate').checked = settings.showEstimate;
+    $('th-p-theme').value = settings.theme;
     $('th-p-lang').value = settings.lang;
     $('th-p-logsize').value = String(settings.logSize);
     $('th-p-s1').value = settings.stages[0];
@@ -1860,6 +1924,7 @@ function buildPanel() {
                 break;
             case 'th-p-usage': settings.readUsage = el.checked; break;
             case 'th-p-estimate': settings.showEstimate = el.checked; break;
+            case 'th-p-theme': settings.theme = el.value; break;
             case 'th-p-lang': settings.lang = el.value; saveSettings(); buildPanel(); rebuildMenu(); render(); return;
             case 'th-p-logsize': settings.logSize = Number(el.value) || 50; saveLog(); break;
             case 'th-p-s1': case 'th-p-s2': case 'th-p-s3': {
@@ -1935,6 +2000,7 @@ async function init() {
         loadSettings();
         bindEvents();
         installFetchWatch();
+        loadStExtensions();
         buildPanel();
         rebuildMenu();
         window.addEventListener('resize', onResize);

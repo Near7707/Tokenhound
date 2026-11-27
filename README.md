@@ -17,8 +17,9 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 - **Usage reported by the API**: input, cache hit, output, and thinking tokens, when your API reports them.
 - **Reply size**: estimated tokens of the last reply and its thinking part.
 - **Biggest items**, a **trend line**, and a **turn log** for each chat.
-- **Estimate next**: count the next prompt without sending it.
-- **Current model and connection profile**.
+- **Show estimate**: count the next prompt without sending it. Press "Back to normal" to return to the last turn.
+- **Current model and connection profile**. Extension names come from your installed extensions when they can be matched.
+- **Window colors**: auto (follows your SillyTavern theme), light, or dark.
 - English and Korean. By default it follows your SillyTavern language.
 
 The hound has four moods: relaxed, sniffing, panting, and sleepy. You can change the steps (default 50 / 85 / 95%) in the settings.
@@ -35,7 +36,7 @@ Settings are in **Extensions › Tokenhound**. The ⚙ button in the window has 
 - Counts come from SillyTavern's tokenizer, so they are **estimates**. Your model may count a little differently. The "Reported by the API" box shows the real numbers when your API sends them.
 - Tokenhound finds each part by looking for its text in the final prompt. "Preset and other" is what's left: system prompts, formatting, and anything it couldn't match.
 - Regex scripts or macros that change text only in the prompt can make some parts land in "Preset and other".
-- SillyTavern doesn't report world info during a dry run. "Estimate next" reuses the entries from the last real turn and doesn't include the message you're typing.
+- SillyTavern doesn't report world info during a dry run. "Show estimate" reuses the entries from the last real turn and doesn't include the message you're typing.
 - The usage box depends on your API. Some APIs don't send usage when streaming.
 - With Google Gemini (AI Studio or Vertex AI), usage shows only when streaming is on. With streaming off, SillyTavern doesn't pass the usage on.
 
@@ -70,8 +71,9 @@ Group chats are supported. The card row shows the name of the character who is s
 - **API가 알려 준 사용량**: API가 알려 주면 입력, 캐시 적중, 출력, 생각 토큰을 보여 줘요.
 - **답 크기**: 마지막 답과 생각 부분이 몇 토큰인지 예상해서 보여 줘요.
 - **큰 항목 순위**, **추세 그래프**, 채팅방별 **턴 기록**도 있어요.
-- **미리 세기**: 보내지 않고 다음 프롬프트를 세 봐요.
-- **지금 모델과 연결 프로필**을 보여 줘요.
+- **예상치 보기**: 보내지 않고 다음 프롬프트를 세 봐요. "원래대로"를 누르면 지난 턴 화면으로 돌아가요.
+- **지금 모델과 연결 프로필**을 보여 줘요. 확장 이름은 설치된 확장 이름과 맞으면 그 이름으로 보여 줘요.
+- **창 색**: 자동(실리태번 테마 따라가기) / 라이트 / 다크 중에 고를 수 있어요.
 - 영어와 한국어를 지원해요. 처음에는 실리태번 언어 설정을 따라가요.
 
 하운드 표정은 느긋함, 킁킁, 헥헥, 졸음 네 단계예요. 단계 기준(기본 50 / 85 / 95%)은 설정에서 바꿀 수 있어요.
@@ -88,7 +90,7 @@ Group chats are supported. The card row shows the name of the character who is s
 - 숫자는 실리태번 토크나이저로 센 **예상치**예요. 모델이 실제로 세는 값과 조금 다를 수 있어요. API가 사용량을 보내 주면 "API가 알려 준 사용량" 칸에 실제 숫자가 나와요.
 - 최종 프롬프트에서 각 항목의 글을 찾아서 나눠요. "프리셋 / 기타"는 그러고 남은 부분이에요. 시스템 프롬프트, 서식, 그리고 어디에도 맞추지 못한 글이 여기 들어가요.
 - 프롬프트에서만 글을 바꾸는 정규식이나 매크로가 있으면, 그 부분이 "프리셋 / 기타"로 들어갈 수 있어요.
-- 실리태번은 미리 세기를 할 때 로어북 정보를 알려 주지 않아요. 그래서 "미리 세기"는 마지막 턴의 로어북 항목을 다시 쓰고, 지금 입력 중인 메시지는 포함하지 않아요.
+- 실리태번은 예상치를 셀 때 로어북 정보를 알려 주지 않아요. 그래서 "예상치 보기"는 마지막 턴의 로어북 항목을 다시 쓰고, 지금 입력 중인 메시지는 포함하지 않아요.
 - 사용량 칸은 API에 따라 달라요. 스트리밍일 때는 사용량을 보내지 않는 API도 있어요.
 - 구글 제미나이(AI Studio, Vertex AI)는 스트리밍을 켰을 때만 사용량이 나와요. 스트리밍을 끄면 실리태번이 사용량을 넘겨주지 않아요.
 
