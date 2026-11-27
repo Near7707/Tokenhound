@@ -5,11 +5,13 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.16';
+const VERSION = '0.5.17';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
+const SIDE_PREFIX = 'tokenhound:side:';
+const SIDE_MAX = 200; // side calls kept per chat
 const POS_KEY = 'tokenhound:btnpos';
 const HOUSE_POS_KEY = 'tokenhound:housepos';
 const DISPLAYS = ['button', 'walk', 'house', 'menu'];
@@ -74,6 +76,7 @@ let failedSaveWarned = false;
 const state = {
     chatId: null,
     log: [],            // turn records for the current chat
+    side: [],           // AI calls made apart from chat replies, for the current chat
     latest: null,       // last real turn
     contFrom: null,     // send time of the message a "continue" is about to change
     estimate: null,     // last estimate (not saved)
@@ -88,6 +91,9 @@ const state = {
     expand: { wi: false, ext: false },
     logOpen: new Set(),   // turns opened in the turn log (by time)
     logExpand: new Set(), // "<time>:wi" / "<time>:ext" opened inside a turn
+    pane: 'chat',         // first screen: 'chat' (chat replies) or 'side' (side calls)
+    paneMenu: false,      // pane picker open
+    sideOpen: new Set(),  // side-call groups opened (by extension)
     baseHeight: window.innerHeight,
     seq: 0,
 };
@@ -187,6 +193,27 @@ function saveSettings() {
 }
 
 // ---------- turn log storage (this device only) ----------
+
+function loadSide(chatId) {
+    if (!chatId) return [];
+    try {
+        const data = JSON.parse(localStorage.getItem(SIDE_PREFIX + chatId) || 'null');
+        return Array.isArray(data?.calls) ? data.calls.filter(r => r && Number.isFinite(r.t)) : [];
+    } catch { return []; }
+}
+
+function storeSide(chatId, calls) {
+    if (!chatId) return;
+    try { localStorage.setItem(SIDE_PREFIX + chatId, JSON.stringify({ v: 1, calls })); } catch { /* ignore */ }
+}
+
+/** Joins two side-call lists by time. */
+function mergeSide(local, remote, cutoff) {
+    const byT = new Map();
+    for (const r of remote || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
+    for (const r of local || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
+    return [...byT.values()].filter(r => r.t > cutoff).sort((x, y) => x.t - y.t).slice(-SIDE_MAX);
+}
 
 function loadLog(chatId) {
     if (!chatId) return [];
@@ -304,14 +331,17 @@ function mergeTurns(local, remote, cutoff) {
 
 const sameTurns = (x, y) => x.length === y.length && x.every((r, i) => r.t === y[i].t);
 
-function adoptMerged(chatId, merged) {
+function adoptMerged(chatId, merged, side) {
+    if (side) storeSide(chatId, side);
     if (state.chatId !== chatId) return;
     const before = state.log;
+    const sideBefore = state.side;
+    if (side) state.side = side;
     state.log = merged;
     const last = lastShown();
     if (!state.latest || !last || last.t !== state.latest.t) state.latest = last;
     try { localStorage.setItem(LOG_PREFIX + chatId, JSON.stringify({ v: LOG_FORMAT, turns: merged })); } catch { /* ignore */ }
-    if (!sameTurns(before, merged)) render();
+    if (!sameTurns(before, merged) || (side && !sameTurns(sideBefore, side))) render();
 }
 
 /** Loads the server copy of this chat's log and merges it in. */
@@ -328,8 +358,10 @@ async function pullLog(force = false) {
         const cutoff = Math.max(index.clearedAllAt, Number(file?.clearedAt) || 0);
         const remote = file?.v === SERVER_FORMAT && Array.isArray(file.turns) ? file.turns : [];
         const merged = mergeTurns(state.chatId === chatId ? state.log : [], remote, cutoff);
-        adoptMerged(chatId, merged);
-        if (!sameTurns(merged, mergeTurns([], remote, cutoff))) schedulePush();
+        const rSide = Array.isArray(file?.side) ? file.side : [];
+        const side = mergeSide(state.chatId === chatId ? state.side : loadSide(chatId), rSide, cutoff);
+        adoptMerged(chatId, merged, side);
+        if (!sameTurns(merged, mergeTurns([], remote, cutoff)) || !sameTurns(side, mergeSide([], rSide, cutoff))) schedulePush();
     } catch (e) {
         syncFailed(e);
     }
@@ -355,8 +387,9 @@ async function pushLog(chatId) {
         const remote = file?.v === SERVER_FORMAT && Array.isArray(file.turns) ? file.turns : [];
         const local = state.chatId === chatId ? state.log : loadLog(chatId);
         const merged = mergeTurns(local, remote, cutoff);
-        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: fileCut, turns: merged });
-        adoptMerged(chatId, merged);
+        const side = mergeSide(state.chatId === chatId ? state.side : loadSide(chatId), Array.isArray(file?.side) ? file.side : [], cutoff);
+        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: fileCut, turns: merged, side });
+        adoptMerged(chatId, merged, side);
         if (!index.files.includes(name)) {
             index.files.push(name);
             while (index.files.length > MAX_CHATS) {
@@ -375,7 +408,7 @@ async function clearServerChat(chatId) {
     // Keep an empty file with a "cleared" time, so other devices drop their older copies too.
     try {
         const name = fileNameFor(chatId);
-        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: Date.now(), turns: [] });
+        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: Date.now(), turns: [], side: [] });
         const index = await readIndex();
         if (!index.files.includes(name)) { index.files.push(name); await serverWrite(SERVER_INDEX, index); }
     } catch (e) {
@@ -402,8 +435,10 @@ function clearChatLog() {
     pushChain = pushChain.then(() => clearServerChat(chatId)).catch(() => {});
     if (state.chatId) {
         try { localStorage.removeItem(LOG_PREFIX + state.chatId); } catch { /* ignore */ }
+        try { localStorage.removeItem(SIDE_PREFIX + state.chatId); } catch { /* ignore */ }
     }
     state.log = [];
+    state.side = [];
     state.latest = null;
     state.estimate = null;
     state.prevPrompt.delete(state.chatId);
@@ -416,7 +451,7 @@ function clearAllLogs() {
         const keys = [];
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k && (k.startsWith(LOG_PREFIX) || k === LOG_INDEX)) keys.push(k);
+            if (k && (k.startsWith(LOG_PREFIX) || k.startsWith(SIDE_PREFIX) || k === LOG_INDEX)) keys.push(k);
         }
         keys.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
@@ -863,20 +898,166 @@ async function readUsage(res, pending) {
     else pending.onRec = apply;
 }
 
+// ---------- AI calls made apart from chat replies (read-only) ----------
+
+const OWN_FOLDER = (() => {
+    try { return decodeURIComponent((/\/scripts\/extensions\/(?:third-party\/)?([^/]+)\//.exec(import.meta.url) || [])[1] || ''); } catch { return ''; }
+})();
+
+function callStack() {
+    const limit = Error.stackTraceLimit;
+    try {
+        Error.stackTraceLimit = 60;
+        return String(new Error().stack || '');
+    } catch { return ''; } finally {
+        try { Error.stackTraceLimit = limit; } catch { /* ignore */ }
+    }
+}
+
+/**
+ * The extension folder that made the call, from the call stack. '' if unknown.
+ * Extensions that only wrap fetch sit before SillyTavern's own request code,
+ * so the first extension after SillyTavern's code is the caller.
+ */
+function callerFolder(stack) {
+    const extRe = /\/scripts\/extensions\/(third-party\/)?([^/\s?#:]+)\//;
+    let seenCore = false;
+    let fallback = '';
+    for (const line of String(stack).split('\n')) {
+        const m = extRe.exec(line);
+        if (m) {
+            let folder = m[2];
+            try { folder = decodeURIComponent(folder); } catch { /* keep */ }
+            if (folder === OWN_FOLDER) continue;
+            const full = (m[1] ? 'third-party/' : '') + folder;
+            if (seenCore) return full;
+            if (!fallback) fallback = full;
+        } else if (/\/(scripts\/[^\s)]*|script)\.js/.test(line)) {
+            seenCore = true;
+        }
+    }
+    // Called fetch directly (no SillyTavern code in between): that extension is the caller.
+    return seenCore ? '' : fallback;
+}
+
+function folderLabel(full) {
+    if (!full) return '';
+    let shown = '';
+    try { shown = stExt?.getExtensionManifest?.(full)?.display_name || ''; } catch { /* ignore */ }
+    return shown;
+}
+
+const folderPlain = (full) => String(full || '').replace(/^third-party\//, '');
+
+function sideModel(body) {
+    if (body?.model) return String(body.model);
+    if (body && !body.chat_completion_source && !body.api_type) return '';
+    try { return ctx().getChatCompletionModel?.() || ''; } catch { return ''; }
+}
+
+function bodyText(body) {
+    if (!body) return '';
+    if (Array.isArray(body.messages)) return body.messages.map(m => contentText(m?.content)).join('\n');
+    if (typeof body.prompt === 'string') return body.prompt;
+    return '';
+}
+
+function replyText(json) {
+    try {
+        const c = json?.choices?.[0];
+        if (c) return contentText(c.message?.content ?? c.text ?? '');
+        if (Array.isArray(json?.content)) return json.content.map(x => x?.text || '').join('');
+        const g = json?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(g)) return g.map(x => x?.text || '').join('');
+        if (typeof json?.output === 'string') return json.output;
+    } catch { /* ignore */ }
+    return '';
+}
+
+function watchSide(p, body, stack, chatId) {
+    if (!chatId) return; // only calls made while a chat is open
+    const t0 = Date.now();
+    const src = callerFolder(stack);
+    const model = sideModel(body);
+    p.then(async (res) => {
+        if (!res || !res.ok) return;
+        let usage = null;
+        let outText = null;
+        if (settings.readUsage) {
+            try {
+                const text = await res.clone().text();
+                const isStream = (res.headers.get('content-type') || '').includes('event-stream') || /^\s*(data|event):/.test(text);
+                if (isStream) {
+                    let out = '';
+                    for (const line of text.split('\n')) {
+                        const s2 = line.trim();
+                        if (!s2.startsWith('data:')) continue;
+                        const b = s2.slice(5).trim();
+                        if (!b || b === '[DONE]') continue;
+                        try {
+                            const j = JSON.parse(b);
+                            const d = j?.choices?.[0]?.delta;
+                            out += contentText(d?.content ?? '') || j?.choices?.[0]?.text || j?.delta?.text || replyText(j) || '';
+                            if (b.includes('oken')) usage = mergeUsage(usage, pickUsage(j));
+                        } catch { /* skip */ }
+                    }
+                    outText = out;
+                } else {
+                    const json = JSON.parse(text);
+                    usage = pickUsage(json);
+                    outText = replyText(json);
+                }
+            } catch { /* keep going with estimates */ }
+            if (usage && usage.separate) usage.input = (usage.input || 0) + (usage.cached || 0) + (usage.write || 0);
+        }
+        let est = false;
+        let input = Number.isFinite(usage?.input) ? usage.input : null;
+        let output = Number.isFinite(usage?.output) ? usage.output : null;
+        if (input === null) { input = await count(bodyText(body)); est = true; }
+        if (output === null && outText !== null) { output = await count(outText); est = true; }
+        addSide(chatId, { t: t0, src, name: folderLabel(src) || folderPlain(src), model, in: input, out: output, est: est || undefined });
+    }).catch(() => { /* failed or stopped: not counted */ });
+}
+
+function addSide(chatId, rec) {
+    const list = chatId === state.chatId ? state.side : loadSide(chatId);
+    while (list.some(r => r.t === rec.t)) rec.t += 1; // keep times unique
+    list.push(rec);
+    list.sort((a, b) => a.t - b.t);
+    const kept = list.slice(-SIDE_MAX);
+    if (chatId === state.chatId) state.side = kept;
+    storeSide(chatId, kept);
+    if (chatId === state.chatId) { schedulePush(); if (state.open && state.view === 'side') render(); }
+}
+
 function installFetchWatch() {
     if (window.__tokenhoundFetchWatch) return;
     const original = window.fetch;
     if (typeof original !== 'function') return;
     const watched = function (input, init) {
-        const p = original.apply(this, arguments);
+        // Who is calling: read before the request starts, while the call stack is still here.
+        let stack = '';
+        let hit = null;
         try {
+            const url = typeof input === 'string' ? input : (input?.url || '');
+            hit = settings?.enabled ? /\/api\/backends\/(chat|text)-completions\/generate/.exec(url) : null;
+            if (hit) stack = callStack();
+        } catch { hit = null; }
+        const p = original.apply(this, arguments);
+        if (!hit) return p;
+        try {
+            let body = null;
+            try { if (typeof init?.body === 'string') body = JSON.parse(init.body); } catch { body = null; }
             const pending = state.pendingUsage;
-            if (pending && settings?.enabled && settings?.readUsage) {
-                const url = typeof input === 'string' ? input : (input?.url || '');
-                if (/\/api\/backends\/(chat|text)-completions\/generate/.test(url)) {
+            // Chat replies carry a type (normal, swipe, continue...). Calls without one, or "quiet", are side calls.
+            const isReply = hit[1] === 'chat' && body ? (typeof body.type === 'string' && body.type !== 'quiet') : !!pending;
+            if (isReply) {
+                if (pending && settings.readUsage) {
                     state.pendingUsage = null;
                     p.then(res => { try { readUsage(res.clone(), pending); } catch { /* ignore */ } }).catch(() => { /* ignore */ });
                 }
+            } else {
+                watchSide(p, body, stack, ctx().getCurrentChatId?.() || null);
             }
         } catch { /* never break the request */ }
         return p;
@@ -997,9 +1178,12 @@ function onGenerationDone() {
 function onChatChanged() {
     state.chatId = ctx().getCurrentChatId?.() || null;
     state.log = loadLog(state.chatId);
+    state.side = loadSide(state.chatId);
     state.latest = lastShown();
     state.logOpen.clear();
     state.logExpand.clear();
+    state.sideOpen.clear();
+    state.paneMenu = false;
     state.estimate = null;
     state.current = null;
     state.pendingUsage = null;
@@ -1260,6 +1444,74 @@ function renderButtons() {
     return `<div class="th-btns"><button class="th-btn" data-act="log">${esc(t('btn_log'))}</button>${est}<button class="th-btn" data-act="copy">${esc(t('btn_copy'))}</button></div>`;
 }
 
+function paneHtml() {
+    const n = state.side.length;
+    const label = state.pane === 'side' ? t('pane_side') : t('pane_chat');
+    let html = `<div class="th-pane" role="button" tabindex="0" data-act="pane" aria-haspopup="menu" aria-expanded="${state.paneMenu}"><span class="th-ellipsis">${esc(label)}</span><i class="fa-solid fa-chevron-${state.paneMenu ? 'up' : 'down'}"></i></div>`;
+    if (state.paneMenu) {
+        const item = (k, text, extra = '') => `<div class="th-paneitem${state.pane === k ? ' th-on' : ''}" role="menuitemradio" aria-checked="${state.pane === k}" tabindex="0" data-act="pane-${k}">${esc(text)}${extra}</div>`;
+        html += `<div class="th-panemenu" role="menu">${item('chat', t('pane_chat'))}${item('side', t('pane_side'), n ? ` <span class="th-panecount">· ${esc(t('side_n', { n }))}</span>` : '')}</div>`;
+    }
+    return html;
+}
+
+function sideKey(r) { return r.src || ''; }
+
+function sideName(key, fallback) {
+    if (!key) return t('side_unknown');
+    return folderLabel(key) || fallback || folderPlain(key);
+}
+
+const sideNum = (v) => (Number.isFinite(v) ? fmt(v) : '?');
+
+function renderSide() {
+    const calls = state.side;
+    let html = `<div class="th-small th-muted th-sidedesc">${esc(t('side_desc'))}</div>`;
+    if (!calls.length) return html + `<div class="th-muted th-pad">${esc(t('side_empty'))}</div>`;
+    let tin = 0;
+    let tout = 0;
+    let anyEst = false;
+    const groups = new Map();
+    for (const r of calls) {
+        tin += r.in || 0;
+        tout += r.out || 0;
+        if (r.est || !Number.isFinite(r.out)) anyEst = true;
+        const k = sideKey(r);
+        const g = groups.get(k) || { key: k, name: r.name, n: 0, in: 0, out: 0, model: '', last: 0, list: [], est: false };
+        if (r.est || !Number.isFinite(r.out)) g.est = true;
+        g.n += 1;
+        g.in += r.in || 0;
+        g.out += r.out || 0;
+        if (r.t >= g.last) { g.last = r.t; g.model = r.model || g.model; if (r.name) g.name = r.name; }
+        g.list.push(r);
+        groups.set(k, g);
+    }
+    const tilde = anyEst ? '~' : '';
+    html += `<div class="th-sidetiles">`
+        + `<div class="th-sidetile"><div class="th-small th-muted">${esc(t('side_calls'))}</div><b>${esc(t('side_n', { n: calls.length }))}</b></div>`
+        + `<div class="th-sidetile"><div class="th-small th-muted">${esc(t('side_sent'))}</div><b>${tilde}${fmt(tin)}</b></div>`
+        + `<div class="th-sidetile"><div class="th-small th-muted">${esc(t('side_reply'))}</div><b>${tilde}${fmt(tout)}</b></div></div>`;
+    const list = [...groups.values()].sort((a, b) => (b.in + b.out) - (a.in + a.out) || (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0));
+    html += '<div class="th-log">';
+    for (const g of list) {
+        const open = state.sideOpen.has(g.key);
+        const name = sideName(g.key, g.name);
+        html += `<div class="th-logitem"><div class="th-logrow th-click" data-sideopen="${esc(g.key)}" role="button" tabindex="0" aria-expanded="${open}"><div class="th-logmain"><div class="th-logtop"><span class="th-ellipsis th-logtitle${g.key ? '' : ' th-muted'}">${esc(name)}</span>${g.model ? `<span class="th-logtag th-ellipsis">${esc(g.model)}</span>` : ''}</div><div class="th-small th-muted th-ellipsis">${esc(t('side_row', { n: g.n, in: (g.est ? '~' : '') + fmt(g.in), out: (g.est ? '~' : '') + fmt(g.out) }))}</div></div><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i></div>`;
+        if (open) {
+            html += '<div class="th-logdetail">';
+            for (const r of g.list.slice(-10).reverse()) {
+                const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const est = r.est || !Number.isFinite(r.out);
+                html += `<div class="th-subrow"><span class="th-muted th-ellipsis">${esc(time)}${r.model && r.model !== g.model ? ` · ${esc(r.model)}` : ''}</span><span class="th-nowrap">${est ? '~' : ''}${sideNum(r.in)} → ${sideNum(r.out)}${est ? ` <span class="th-sideest">${esc(t('side_est'))}</span>` : ''}</span></div>`;
+            }
+            if (g.list.length > 10) html += `<div class="th-small th-muted">${esc(t('side_more', { n: g.list.length - 10 }))}</div>`;
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    return html + '</div>';
+}
+
 /** Send time -> where that message (and swipe) is in the chat now. */
 function sendDateMap() {
     const chat = ctx().chat;
@@ -1398,13 +1650,16 @@ function ensureWindow() {
     win.id = 'th-window';
     win.className = 'th-window';
     win.setAttribute('role', 'dialog');
-    win.innerHTML = `<div class="th-head"><button class="th-icon" data-act="back" hidden></button><span class="th-logo">${houndSvg(1, 1.25)}</span><b class="th-title th-ellipsis"></b><button class="th-icon" data-act="settings"><i class="fa-solid fa-gear"></i></button><button class="th-icon" data-act="close"><i class="fa-solid fa-xmark"></i></button></div><div class="th-body"></div>`;
+    win.innerHTML = `<div class="th-head"><button class="th-icon" data-act="back" hidden></button><span class="th-logo">${houndSvg(1, 1.25)}</span><b class="th-title th-ellipsis"></b><span class="th-paneslot"></span><span class="th-spacer"></span><button class="th-icon" data-act="settings"><i class="fa-solid fa-gear"></i></button><button class="th-icon" data-act="close"><i class="fa-solid fa-xmark"></i></button></div><div class="th-body"></div>`;
     document.body.appendChild(win);
     win.addEventListener('click', onWindowClick);
     win.addEventListener('change', onWindowChange);
     win.addEventListener('keydown', (e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && (e.target?.dataset?.expand || e.target?.dataset?.logrow)) { e.preventDefault(); e.target.click(); }
-        if (e.key === 'Escape') closeWindow();
+        if ((e.key === 'Enter' || e.key === ' ') && (e.target?.dataset?.expand || e.target?.dataset?.logrow || e.target?.dataset?.sideopen || e.target?.dataset?.act?.startsWith('pane'))) { e.preventDefault(); e.target.click(); }
+        if (e.key === 'Escape') {
+            if (state.paneMenu) { state.paneMenu = false; render(); win.querySelector('[data-act="pane"]')?.focus(); return; }
+            closeWindow();
+        }
     });
     return win;
 }
@@ -1461,8 +1716,10 @@ function renderWindow() {
     const rec = shown();
     win.querySelector('.th-logo').innerHTML = houndSvg(stageOf(pctOf(rec)), isMobile() ? 1.25 : 2);
     title.textContent = state.view === 'settings' ? t('settings') : (state.view === 'log' ? t('btn_log') : t('title'));
+    win.querySelector('.th-paneslot').innerHTML = state.view === 'main' ? paneHtml() : '';
     const scroll = body.scrollTop;
-    body.innerHTML = state.view === 'settings' ? renderQuickSettings() : (state.view === 'log' ? renderLog() : renderMain());
+    const side = state.view === 'main' && state.pane === 'side';
+    body.innerHTML = state.view === 'settings' ? renderQuickSettings() : (state.view === 'log' ? renderLog() : (side ? renderSide() : renderMain()));
     body.scrollTop = scroll;
 }
 
@@ -1483,8 +1740,15 @@ async function copySummary() {
 }
 
 function onWindowClick(e) {
-    const el = e.target.closest('[data-act],[data-expand],[data-logrow]');
+    const el = e.target.closest('[data-act],[data-expand],[data-logrow],[data-sideopen]');
+    if (state.paneMenu && !el?.dataset?.act?.startsWith('pane')) { state.paneMenu = false; render(); }
     if (!el) return;
+    if (el.dataset.sideopen !== undefined) {
+        const key = el.dataset.sideopen;
+        if (state.sideOpen.has(key)) state.sideOpen.delete(key); else state.sideOpen.add(key);
+        render();
+        return;
+    }
     if (el.dataset.logrow) {
         const key = Number(el.dataset.logrow);
         if (state.logOpen.has(key)) state.logOpen.delete(key); else state.logOpen.add(key);
@@ -1505,6 +1769,13 @@ function onWindowClick(e) {
         case 'close': closeWindow(); break;
         case 'settings': state.view = state.view === 'settings' ? 'main' : 'settings'; render(); break;
         case 'back': state.view = 'main'; render(); break;
+        case 'pane': state.paneMenu = !state.paneMenu; render(); if (state.paneMenu) document.querySelector('#th-window [data-act="pane-' + state.pane + '"]')?.focus(); break;
+        case 'pane-chat': case 'pane-side':
+            state.pane = el.dataset.act === 'pane-side' ? 'side' : 'chat';
+            state.paneMenu = false;
+            render();
+            document.querySelector('#th-window [data-act="pane"]')?.focus();
+            break;
         case 'log': state.view = 'log'; render(); break;
         case 'copy': copySummary(); break;
         case 'estimate': runEstimate(); break;
@@ -2354,6 +2625,7 @@ async function init() {
         document.addEventListener('visibilitychange', () => { if (!document.hidden && (settings.display === 'walk' || settings.display === 'house')) render(); });
         state.chatId = ctx().getCurrentChatId?.() || null;
         state.log = loadLog(state.chatId);
+        state.side = loadSide(state.chatId);
         state.latest = lastShown();
         render();
         pullLog(true);
