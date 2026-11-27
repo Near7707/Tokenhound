@@ -258,3 +258,66 @@
 
 /* Keep the black outline visible on dark themes */
 .th-hound { filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.55)); }
+
+/* Small button (drag to move) */
+.th-fab {
+    position: fixed;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 36px;
+    padding: 0 10px 0 8px;
+    border-radius: 18px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.5));
+    background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.9));
+    color: var(--SmartThemeBodyColor, inherit);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.th-fab.th-dragging { cursor: grabbing; opacity: 0.85; }
+.th-fab-text { font-variant-numeric: tabular-nums; }
+
+/* Wandering hound: a zero-height lane on the top edge of the input */
+.th-lane {
+    position: relative;
+    height: 0;
+    pointer-events: none;
+}
+.th-walker {
+    position: absolute;
+    bottom: 0;
+    left: 8px;
+    pointer-events: auto;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+.th-walk-dog { display: block; }
+.th-walker.th-flip .th-walk-dog { transform: scaleX(-1); }
+.th-walk-bubble {
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.5));
+    background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.9));
+    color: var(--SmartThemeBodyColor, inherit);
+    font-size: 11px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+.th-walk-bubble.th-show,
+.th-walker:hover .th-walk-bubble,
+.th-walker:focus-visible .th-walk-bubble { opacity: 1; }

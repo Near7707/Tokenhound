@@ -44,36 +44,54 @@ function build() {
     set(s3, 1, 21, 'gg');
     set(s3, 2, 21, 'gg');
 
-    // Sleepy: lying down, eye closed, zz.
-    const blank = '.'.repeat(W);
-    const s4 = [blank, blank, blank].concat(STAND.slice(0, 11));
-    set(s4, 7, 16, 'kk');
-    s4.push('...kkkkkkkkkkkkkkkkk'.padEnd(W, '.'));
-    s4.push(blank);
-    set(s4, 0, 21, 'gggg');
-    set(s4, 1, 23, 'g');
-    set(s4, 2, 22, 'g');
-    set(s4, 3, 21, 'gggg');
-    set(s4, 0, 26, 'gg');
-    set(s4, 1, 27, 'g');
-    set(s4, 2, 26, 'gg');
+    // Sleepy: flat on the ground, head on the paws, eye shut, zz above the head.
+    const s4 = [
+        '........................ggg.',
+        '..........................g.',
+        '.........................g..',
+        '........................ggg.',
+        '...................gggg.....',
+        '......................g.....',
+        '.....................g......',
+        '....................gggg....',
+        '.................kkkk.......',
+        '.....kkkkkkkk...kwwwwk......',
+        '....kwwwwwwwwkkkwwwwwwkk....',
+        '...kwwkkkwwwwkkkkwkkwwwwk...',
+        '..kwwkkkkwwwwkkkkkwwwwwwkk..',
+        '..kwwwkkwwwwwwkkkkwwwkkkk...',
+        'kkkwwwwwwwwwwwwwkkkwwwwwwk..',
+        '.kkkkkkkkkkkkkkkkkkkkkkkk...',
+    ].map(r => r.padEnd(W, '.'));
 
     return [s1, s2, s3, s4];
 }
 
+// Walking: the standing hound mid-stride (legs spread), used by the wandering mode.
+function buildWalk() {
+    const w = STAND.slice();
+    w[12] = '...kwk.kwk...kwk.kwk'.padEnd(W, '.');
+    w[13] = '..kwk...kwk.kwk...kwk'.padEnd(W, '.');
+    w[14] = '..kkk...kkk.kkk...kkk'.padEnd(W, '.');
+    return w;
+}
+
+
 const STAGES = build();
+const WALK = buildWalk();
 const cache = new Map();
 
 /**
  * Returns an SVG string of the hound for a mood (1-4) at a pixel scale.
  * @param {number} stage 1..4
  * @param {number} scale pixels per grid cell
+ * @param {boolean} walking draw the mid-stride frame instead of a mood
  */
-export function houndSvg(stage = 1, scale = 1) {
+export function houndSvg(stage = 1, scale = 1, walking = false) {
     const idx = Math.min(4, Math.max(1, stage)) - 1;
-    const key = `${idx}:${scale}`;
+    const key = `${walking ? 'w' : idx}:${scale}`;
     if (cache.has(key)) return cache.get(key);
-    const rows = STAGES[idx];
+    const rows = walking ? WALK : STAGES[idx];
     let rects = '';
     for (let y = 0; y < H; y++) {
         const line = rows[y] || '';

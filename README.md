@@ -4,11 +4,11 @@ A SillyTavern extension that sniffs out where your prompt tokens go.
 
 [한국어 설명은 아래에 있어요](#한국어)
 
-Tokenhound shows how much of the context each part of the prompt used: preset, character card, persona, world info, extensions, and chat history. A small black-and-white pixel hound sits above the input box. It gets more tired as the context fills up.
+Tokenhound shows how much of the context each part of the prompt used: preset, character card, persona, world info, extensions, and chat history. A small black-and-white pixel hound keeps you company on screen. It gets more tired as the context fills up.
 
 ## Features
 
-- **Mini bar above the input**: how full the context is, at a glance. Tap it to open the window.
+- **Choose how it shows on screen**: a small button you can drag anywhere (default), a bar above the input, a hound that wanders along the input box, or nothing at all (open it from the wand menu). Tap the hound to open the window.
 - **Breakdown**: tokens and percent for each part of the prompt. Shows the change from the last turn.
 - **World info and extensions**: tap to see each world info entry and each extension prompt.
 - **Chat history**: how many messages fit, and how many older ones were left out.
@@ -53,11 +53,11 @@ Group chats are supported. The card row shows the name of the character who is s
 
 실리태번 프롬프트에서 토큰이 어디에 얼마나 들어갔는지 찾아 주는 확장이에요.
 
-프리셋, 캐릭터 카드, 페르소나, 로어북, 확장, 대화 기록이 컨텍스트를 각각 얼마나 썼는지 보여 줘요. 입력칸 위에는 흑백 도트 하운드가 앉아 있고, 컨텍스트가 찰수록 점점 지쳐요.
+프리셋, 캐릭터 카드, 페르소나, 로어북, 확장, 대화 기록이 컨텍스트를 각각 얼마나 썼는지 보여 줘요. 화면에는 흑백 도트 하운드가 함께 있고, 컨텍스트가 찰수록 점점 지쳐요.
 
 ### 기능
 
-- **입력칸 위 작은 막대**: 컨텍스트가 얼마나 찼는지 한눈에 보여요. 누르면 창이 열려요.
+- **화면 표시 방식 고르기**: 끌어서 아무 데나 옮길 수 있는 작은 버튼(기본), 입력칸 위 막대, 입력칸 위를 돌아다니는 강아지, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 하운드를 누르면 창이 열려요.
 - **항목별 토큰**: 항목마다 토큰과 비율을 보여 주고, 지난 턴보다 얼마나 늘고 줄었는지도 보여 줘요.
 - **로어북과 확장**: 누르면 로어북 항목별, 확장별로 펼쳐서 볼 수 있어요.
 - **대화 기록**: 메시지가 몇 개 들어갔고, 오래된 메시지가 몇 개 빠졌는지 보여 줘요.

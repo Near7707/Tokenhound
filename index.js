@@ -5,15 +5,17 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
+const POS_KEY = 'tokenhound:btnpos';
+const DISPLAYS = ['button', 'bar', 'walk', 'menu'];
 
 const DEFAULTS = Object.freeze({
     enabled: true,
-    showBar: true,
+    display: 'button',
     lang: 'auto',
     readUsage: true,
     showEstimate: true,
@@ -141,6 +143,8 @@ function loadSettings() {
     if (!Array.isArray(s.stages) || s.stages.length !== 3) s.stages = DEFAULTS.stages.slice();
     s.stages = s.stages.map(n => Math.min(100, Math.max(1, Number(n) || 50)));
     s.logSize = [20, 50, 100].includes(Number(s.logSize)) ? Number(s.logSize) : 50;
+    if (!DISPLAYS.includes(s.display)) s.display = DEFAULTS.display;
+    delete s.showBar; // 0.1.0 setting, replaced by "display"
     settings = s;
 }
 
@@ -896,6 +900,10 @@ function selectHtml(id, value, options) {
     return `<select id="${id}" class="th-select">${options.map(([v, label]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>`;
 }
 
+function displayOptions() {
+    return DISPLAYS.map(d => [d, t('disp_' + d)]);
+}
+
 function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
@@ -904,7 +912,7 @@ function renderQuickSettings() {
     const check = (id, val, label) => `<label class="th-check"><input type="checkbox" id="${id}"${val ? ' checked' : ''}><span>${esc(label)}</span></label>`;
     return '<div class="th-settings">'
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
-        + check('th-q-bar', settings.showBar, t('set_bar'))
+        + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
@@ -1024,7 +1032,7 @@ function onWindowChange(e) {
     const el = e.target;
     switch (el.id) {
         case 'th-q-enabled': settings.enabled = el.checked; break;
-        case 'th-q-bar': settings.showBar = el.checked; break;
+        case 'th-q-display': settings.display = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-lang': settings.lang = el.value; break;
@@ -1039,8 +1047,6 @@ function onWindowChange(e) {
 
 function renderBar() {
     let bar = document.getElementById('th-bar');
-    const want = settings.enabled && settings.showBar;
-    if (!want) { bar?.remove(); return; }
     const anchor = document.getElementById('send_form');
     if (!anchor) return;
     if (!bar) {
@@ -1062,8 +1068,200 @@ function renderBar() {
         + `<span class="th-bar-text">${rec ? `${pct}% · ${short(rec.total)}${rec.est ? ' ~' : ''}` : '—'}</span>`;
 }
 
+// ---------- small button (drag to move, position kept per device) ----------
+
+function readPos() {
+    try {
+        const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p;
+    } catch { /* ignore */ }
+    return null;
+}
+
+function placeFab(fab, left, top) {
+    const vw = window.innerWidth;
+    const vh = state.baseHeight || window.innerHeight;
+    const w = fab.offsetWidth || 64;
+    const h = fab.offsetHeight || 36;
+    if (left === undefined) {
+        const p = readPos();
+        if (p) {
+            left = p.x * vw;
+            top = p.y * vh;
+        } else {
+            const form = document.getElementById('send_form')?.getBoundingClientRect();
+            left = vw - w - 12;
+            top = (form && form.top > h + 20 ? form.top : vh - 90) - h - 10;
+        }
+    }
+    left = Math.min(Math.max(4, left), Math.max(4, vw - w - 4));
+    top = Math.min(Math.max(4, top), Math.max(4, vh - h - 4));
+    fab.style.left = `${Math.round(left)}px`;
+    fab.style.top = `${Math.round(top)}px`;
+}
+
+function bindFabDrag(fab) {
+    let drag = null;
+    let moved = false;
+    const end = () => {
+        if (drag && moved) {
+            const vh = state.baseHeight || window.innerHeight;
+            const pos = { x: (parseFloat(fab.style.left) || 0) / window.innerWidth, y: (parseFloat(fab.style.top) || 0) / vh };
+            try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+        }
+        drag = null;
+        fab.classList.remove('th-dragging');
+    };
+    fab.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, left: parseFloat(fab.style.left) || 0, top: parseFloat(fab.style.top) || 0 };
+        moved = false;
+        try { fab.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    fab.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.sx;
+        const dy = e.clientY - drag.sy;
+        if (!moved && Math.hypot(dx, dy) < 6) return;
+        moved = true;
+        fab.classList.add('th-dragging');
+        placeFab(fab, drag.left + dx, drag.top + dy);
+    });
+    fab.addEventListener('pointerup', end);
+    fab.addEventListener('pointercancel', end);
+    fab.addEventListener('lostpointercapture', end);
+    window.addEventListener('blur', end);
+    window.addEventListener('pagehide', end);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) end(); });
+    fab.addEventListener('click', (e) => {
+        if (moved) { moved = false; e.preventDefault(); return; }
+        state.open ? closeWindow() : openWindow();
+    });
+}
+
+function renderFab() {
+    let fab = document.getElementById('th-fab');
+    if (!fab) {
+        fab = document.createElement('div');
+        fab.id = 'th-fab';
+        fab.className = 'th-fab';
+        fab.setAttribute('role', 'button');
+        fab.tabIndex = 0;
+        fab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); state.open ? closeWindow() : openWindow(); } });
+        document.body.appendChild(fab);
+        bindFabDrag(fab);
+    }
+    const rec = shown();
+    const pct = pctOf(rec);
+    const stage = stageOf(pct);
+    fab.title = `${t('open')} · ${t('stage_' + stage)}`;
+    fab.setAttribute('aria-label', fab.title);
+    fab.innerHTML = `${houndSvg(stage, 1)}<span class="th-fab-text">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    if (!fab.style.left) placeFab(fab);
+}
+
+// ---------- wandering hound (walks along the top edge of the input) ----------
+
+const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null };
+const WALK_SCALE = 1.25;
+
+function reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+function stopWalker() {
+    if (walk.timer) { clearInterval(walk.timer); walk.timer = null; }
+    document.getElementById('th-lane')?.remove();
+}
+
+function walkStep() {
+    const lane = document.getElementById('th-lane');
+    const dog = document.getElementById('th-walker');
+    if (!lane || !dog || !lane.isConnected || document.hidden) {
+        if (walk.timer) { clearInterval(walk.timer); walk.timer = null; }
+        return;
+    }
+    const rec = shown();
+    const pct = pctOf(rec);
+    const stage = stageOf(pct);
+    const still = reducedMotion();
+    walk.tick++;
+    let frame = 'stand';
+    if (stage === 4) {
+        frame = 'sleep';
+    } else if (!still) {
+        // Mood decides the pace: easy trot, stop-and-sniff, slow panting walk.
+        const speed = stage === 3 ? 1 : 2;
+        if (walk.pause > 0) {
+            walk.pause--;
+            frame = stage === 2 ? 'sniff' : 'stand';
+        } else {
+            if (stage === 2 && walk.tick % 45 === 0) walk.pause = 12;
+            const max = Math.max(8, lane.clientWidth - 28 * WALK_SCALE - 8);
+            walk.x += walk.dir * speed;
+            if (walk.x >= max) { walk.x = max; walk.dir = -1; }
+            if (walk.x <= 8) { walk.x = 8; walk.dir = 1; }
+            const step = walk.tick % 4 < 2;
+            frame = step ? 'walk' : (stage === 3 ? 'pant' : 'stand');
+        }
+    }
+    const showBubble = Date.now() < walk.bubbleUntil;
+    const key = `${frame}:${walk.dir}:${showBubble}:${pct}:${rec?.est ? 1 : 0}`;
+    dog.style.left = `${Math.round(walk.x)}px`;
+    if (key === walk.key) return;
+    walk.key = key;
+    const sprite = frame === 'walk' ? houndSvg(1, WALK_SCALE, true)
+        : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, WALK_SCALE);
+    dog.classList.toggle('th-flip', walk.dir < 0);
+    dog.innerHTML = `<span class="th-walk-dog">${sprite}</span><span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+}
+
+function renderWalker() {
+    const anchor = document.getElementById('send_form');
+    if (!anchor) return;
+    let lane = document.getElementById('th-lane');
+    if (!lane || !lane.isConnected) {
+        lane?.remove();
+        lane = document.createElement('div');
+        lane.id = 'th-lane';
+        lane.className = 'th-lane';
+        const dog = document.createElement('div');
+        dog.id = 'th-walker';
+        dog.className = 'th-walker';
+        dog.setAttribute('role', 'button');
+        dog.tabIndex = 0;
+        dog.addEventListener('click', () => (state.open ? closeWindow() : openWindow()));
+        dog.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dog.click(); } });
+        lane.appendChild(dog);
+        anchor.parentNode.insertBefore(lane, anchor);
+        walk.key = '';
+    }
+    const rec = shown();
+    const dog = document.getElementById('th-walker');
+    const stage = stageOf(pctOf(rec));
+    dog.title = `${t('open')} · ${t('stage_' + stage)}`;
+    dog.setAttribute('aria-label', dog.title);
+    // Pop the number up for a moment when a new turn comes in.
+    const recT = rec ? `${rec.t}:${rec.est ? 1 : 0}` : null;
+    if (recT && recT !== walk.lastT) { walk.bubbleUntil = Date.now() + 4000; }
+    walk.lastT = recT;
+    walk.key = '';
+    walkStep();
+    if (!walk.timer && !document.hidden) walk.timer = setInterval(walkStep, 140);
+}
+
+function renderDisplay() {
+    const mode = settings.enabled ? settings.display : 'menu';
+    if (mode !== 'bar') document.getElementById('th-bar')?.remove();
+    if (mode !== 'button') document.getElementById('th-fab')?.remove();
+    if (mode !== 'walk') stopWalker();
+    if (mode === 'bar') renderBar();
+    else if (mode === 'button') renderFab();
+    else if (mode === 'walk') renderWalker();
+}
+
 function render() {
-    try { renderBar(); } catch (e) { console.warn('[Tokenhound] bar', e); }
+    try { renderDisplay(); } catch (e) { console.warn('[Tokenhound] display', e); }
     try { renderWindow(); } catch (e) { console.warn('[Tokenhound] window', e); }
 }
 
@@ -1073,7 +1271,10 @@ function panelHtml() {
     const chk = (id, label) => `<label class="checkbox_label" for="${id}"><input type="checkbox" id="${id}"><span>${esc(label)}</span></label>`;
     return `<div id="th-panel" class="th-panel"><div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>Tokenhound</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content">
 ${chk('th-p-enabled', t('set_enabled'))}
-${chk('th-p-bar', t('set_bar'))}
+<label for="th-p-display">${esc(t('set_display'))}</label>
+<select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+<small class="th-p-hint">${esc(t('set_display_hint'))}</small>
+<div class="th-p-row"><div id="th-p-resetpos" class="menu_button">${esc(t('set_reset_pos'))}</div></div>
 ${chk('th-p-usage', t('set_usage'))}
 <small class="th-p-hint">${esc(t('set_usage_hint'))}</small>
 ${chk('th-p-estimate', t('set_estimate'))}
@@ -1093,7 +1294,7 @@ function syncPanel() {
     const $ = (id) => document.getElementById(id);
     if (!$('th-p-enabled')) return;
     $('th-p-enabled').checked = settings.enabled;
-    $('th-p-bar').checked = settings.showBar;
+    $('th-p-display').value = settings.display;
     $('th-p-usage').checked = settings.readUsage;
     $('th-p-estimate').checked = settings.showEstimate;
     $('th-p-lang').value = settings.lang;
@@ -1116,7 +1317,7 @@ function buildPanel() {
         const el = e.target;
         switch (el.id) {
             case 'th-p-enabled': settings.enabled = el.checked; break;
-            case 'th-p-bar': settings.showBar = el.checked; break;
+            case 'th-p-display': settings.display = el.value; break;
             case 'th-p-usage': settings.readUsage = el.checked; break;
             case 'th-p-estimate': settings.showEstimate = el.checked; break;
             case 'th-p-lang': settings.lang = el.value; saveSettings(); buildPanel(); rebuildMenu(); render(); return;
@@ -1135,6 +1336,13 @@ function buildPanel() {
     });
     panel.addEventListener('click', async (e) => {
         const id = e.target?.closest?.('.menu_button')?.id;
+        if (id === 'th-p-resetpos') {
+            try { localStorage.removeItem(POS_KEY); } catch { /* ignore */ }
+            const fab = document.getElementById('th-fab');
+            if (fab) placeFab(fab);
+            toast('success', t('pos_reset'));
+            return;
+        }
         if (id !== 'th-p-clear' && id !== 'th-p-clearall') return;
         const c = ctx();
         const msg = id === 'th-p-clear' ? t('confirm_clear_chat') : t('confirm_clear_all');
@@ -1169,6 +1377,8 @@ function onResize() {
     const typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
     if (!typing) state.baseHeight = window.innerHeight;
     if (state.open) sizeWindow();
+    const fab = document.getElementById('th-fab');
+    if (fab && !fab.classList.contains('th-dragging')) placeFab(fab);
 }
 
 async function init() {
@@ -1179,6 +1389,7 @@ async function init() {
         buildPanel();
         rebuildMenu();
         window.addEventListener('resize', onResize);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && settings.display === 'walk') render(); });
         state.chatId = ctx().getCurrentChatId?.() || null;
         state.log = loadLog(state.chatId);
         state.latest = state.log[state.log.length - 1] || null;
