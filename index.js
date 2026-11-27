@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -13,6 +13,8 @@ const MAX_CHATS = 100;
 const POS_KEY = 'tokenhound:btnpos';
 const DISPLAYS = ['button', 'walk', 'menu'];
 const FAB_STYLES = ['line', 'ring', 'plain'];
+const TAP_OPENS = ['card', 'window'];
+const CARD_MIN_CHANGE = 50; // smaller changes are left out of the quick card
 const SERVER_PREFIX = 'tokenhound-';
 const SERVER_INDEX = 'tokenhound-index.json';
 const SERVER_FORMAT = 1;
@@ -22,6 +24,7 @@ const DEFAULTS = Object.freeze({
     display: 'walk',
     barOn: false,
     fabStyle: 'line',
+    tapOpens: 'card',
     lang: 'auto',
     readUsage: true,
     serverSync: true,
@@ -155,6 +158,7 @@ function loadSettings() {
     if (!DISPLAYS.includes(s.display)) s.display = DEFAULTS.display;
     s.barOn = !!s.barOn;
     if (!FAB_STYLES.includes(s.fabStyle)) s.fabStyle = DEFAULTS.fabStyle;
+    if (!TAP_OPENS.includes(s.tapOpens)) s.tapOpens = DEFAULTS.tapOpens;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -881,6 +885,7 @@ function onChatChanged() {
     state.current = null;
     state.pendingUsage = null;
     state.lastWi = [];
+    closeCard();
     render();
     pullLog(true);
 }
@@ -1126,6 +1131,10 @@ function fabStyleOptions() {
     return FAB_STYLES.map(f => [f, t('fab_' + f)]);
 }
 
+function tapOptions() {
+    return TAP_OPENS.map(v => [v, t('tap_' + v)]);
+}
+
 function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
@@ -1137,6 +1146,7 @@ function renderQuickSettings() {
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
         + check('th-q-bar', settings.barOn, t('set_bar'))
         + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
+        + (settings.display !== 'menu' ? `<label class="th-field"><span>${esc(t('set_tap'))}</span>${selectHtml('th-q-tap', settings.tapOpens, tapOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
@@ -1182,6 +1192,7 @@ function sizeWindow() {
 }
 
 function openWindow() {
+    closeCard();
     state.open = true;
     state.view = 'main';
     ensureWindow();
@@ -1260,6 +1271,7 @@ function onWindowChange(e) {
         case 'th-q-display': settings.display = el.value; break;
         case 'th-q-bar': settings.barOn = el.checked; break;
         case 'th-q-fabstyle': settings.fabStyle = el.value; break;
+        case 'th-q-tap': settings.tapOpens = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-lang': settings.lang = el.value; break;
@@ -1350,6 +1362,7 @@ function bindFabDrag(fab) {
         const dx = e.clientX - drag.sx;
         const dy = e.clientY - drag.sy;
         if (!moved && Math.hypot(dx, dy) < 6) return;
+        if (!moved) closeCard();
         moved = true;
         fab.classList.add('th-dragging');
         placeFab(fab, drag.left + dx, drag.top + dy);
@@ -1362,7 +1375,7 @@ function bindFabDrag(fab) {
     document.addEventListener('visibilitychange', () => { if (document.hidden) end(); });
     fab.addEventListener('click', (e) => {
         if (moved) { moved = false; e.preventDefault(); return; }
-        state.open ? closeWindow() : openWindow();
+        onHoundTap(fab);
     });
 }
 
@@ -1374,7 +1387,7 @@ function renderFab() {
         fab.className = 'th-fab';
         fab.setAttribute('role', 'button');
         fab.tabIndex = 0;
-        fab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); state.open ? closeWindow() : openWindow(); } });
+        fab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHoundTap(fab); } });
         document.body.appendChild(fab);
         bindFabDrag(fab);
     }
@@ -1387,7 +1400,7 @@ function renderFab() {
     const text = `<span class="th-fab-text${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
     fab.className = `th-fab th-fab-${look}${fab.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
     if (look === 'ring') {
-        fab.innerHTML = `${donutSvg(rec, 56, 4)}<span class="th-fab-in">${houndSvg(stage, 1)}${text}</span>`;
+        fab.innerHTML = `${donutSvg(rec, 56, 7)}<span class="th-fab-in">${houndSvg(stage, 1)}${text}</span>`;
     } else if (look === 'line') {
         fab.innerHTML = `<span class="th-fab-row">${houndSvg(stage, 1)}${text}</span><span class="th-fab-track">${barSegments(rec)}</span>`;
     } else {
@@ -1396,6 +1409,141 @@ function renderFab() {
     // The look changes the size, so keep it inside the screen.
     if (!fab.style.left) placeFab(fab);
     else if (!fab.classList.contains('th-dragging')) placeFab(fab, parseFloat(fab.style.left) || 0, parseFloat(fab.style.top) || 0);
+}
+
+// ---------- quick card (tap the button or the hound) ----------
+
+const card = { anchor: null };
+
+function onHoundTap(anchor) {
+    if (state.open) { closeWindow(); return; }
+    if (settings.tapOpens === 'window') { openWindow(); return; }
+    if (card.anchor === anchor && document.getElementById('th-card')) { closeCard(); return; }
+    openCard(anchor);
+}
+
+function openCard(anchor) {
+    card.anchor = anchor;
+    let el = document.getElementById('th-card');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'th-card';
+        el.className = 'th-card-pop';
+        el.setAttribute('role', 'dialog');
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('[data-act="more"]')) { closeCard(); openWindow(); }
+        });
+        document.body.appendChild(el);
+        document.addEventListener('pointerdown', onCardOutside, true);
+        document.addEventListener('keydown', onCardKey, true);
+        window.addEventListener('resize', closeCard);
+    }
+    renderCard();
+}
+
+function closeCard() {
+    card.anchor = null;
+    const el = document.getElementById('th-card');
+    if (!el) return;
+    el.remove();
+    document.removeEventListener('pointerdown', onCardOutside, true);
+    document.removeEventListener('keydown', onCardKey, true);
+    window.removeEventListener('resize', closeCard);
+}
+
+function onCardOutside(e) {
+    const el = document.getElementById('th-card');
+    if (!el) return;
+    if (el.contains(e.target)) return;
+    if (card.anchor && card.anchor.contains(e.target)) return; // the tap itself toggles
+    closeCard();
+}
+
+function onCardKey(e) {
+    if (e.key === 'Escape') closeCard();
+}
+
+function signed(n) {
+    return `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
+}
+
+function shortPart(k) {
+    return t('card_part_' + k);
+}
+
+function cardHtml() {
+    const rec = shown();
+    const more = `<div class="th-card-foot"><button class="th-card-more" data-act="more">${esc(t('card_more'))} <i class="fa-solid fa-chevron-right"></i></button></div>`;
+    if (!rec) return `<div class="th-muted">${esc(t('card_empty'))}</div>${more}`;
+    const prev = rec.est ? state.latest : state.log[state.log.length - 2];
+    const pct = pctOf(rec);
+    const stage = stageOf(pct);
+    const totalDelta = prev ? rec.total - (prev.total || 0) : 0;
+    let html = `<div class="th-card-top"><span class="th-card-pct${pctClass(stage)}">${pct}%${rec.est ? '~' : ''}</span>`
+        + `<span class="th-num">${fmt(rec.total)}${prev && totalDelta ? ` <span class="th-card-d">${signed(totalDelta)}</span>` : ''}</span></div>`;
+    if (rec.est) html += `<div class="th-small th-muted">${esc(t('estimate_badge'))}</div>`;
+    html += `<div class="th-card-stack">${barSegments(rec)}</div>`;
+
+    if (!prev) {
+        html += `<div class="th-small th-muted">${esc(t('card_first'))}</div>`;
+    } else {
+        const changes = PART_ORDER
+            .map(k => ({ k, now: rec.parts[k] || 0, d: (rec.parts[k] || 0) - (prev.parts?.[k] || 0) }))
+            .filter(x => Math.abs(x.d) >= CARD_MIN_CHANGE)
+            .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+            .slice(0, 3);
+        if (!changes.length) {
+            html += `<div class="th-small th-muted">${esc(t('card_same'))}</div>`;
+        } else {
+            html += `<div class="th-small th-muted">${esc(t('card_changed'))}</div>`;
+            for (const c of changes) {
+                let note = '';
+                if (c.k === 'wi') {
+                    const dn = (rec.wi || []).length - (prev.wi || []).length;
+                    if (dn > 0) note = t('card_wi_on', { n: dn });
+                    else if (dn < 0) note = t('card_wi_off', { n: -dn });
+                }
+                html += `<div class="th-card-row"><span class="th-dot" style="background:${COLORS[c.k]}"></span>`
+                    + `<span class="th-name th-ellipsis">${esc(shortPart(c.k))}${note ? ` <span class="th-muted">(${esc(note)})</span>` : ''}</span>`
+                    + `<span class="th-num">${fmt(c.now)} <span class="th-card-d">${signed(c.d)}</span></span></div>`;
+            }
+        }
+    }
+
+    const ch = rec.cache;
+    const usage = !rec.est && rec.usage ? rec.usage : null;
+    if ((ch && ch.state !== 'first') || usage) {
+        html += '<div class="th-card-line"></div>';
+        if (ch && ch.state === 'same') html += `<div class="th-card-row"><span class="th-name th-muted">${esc(t('card_cache'))}</span><span class="th-card-ok">${esc(t('card_cache_kept'))}</span></div>`;
+        else if (ch && ch.state === 'changed') html += `<div class="th-card-row"><span class="th-muted">${esc(t('card_cache'))}</span><span class="th-card-warn th-ellipsis">${esc(t('card_cache_broke', { where: ch.where }))}</span></div>`;
+        if (usage) html += `<div class="th-card-row"><span class="th-name th-muted">${esc(t('card_usage'))}</span><span class="th-num">${esc(t('card_usage_val', { input: fmt(usage.input), output: fmt(usage.output) }))}</span></div>`;
+    }
+    return html + more;
+}
+
+function placeCard(el, anchor) {
+    const vw = window.innerWidth;
+    const vh = state.baseHeight || window.innerHeight;
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    // Open toward the middle of the screen, above the hound when there's room.
+    let left = (r.left + r.width / 2 > vw / 2) ? r.right - w : r.left;
+    left = Math.min(Math.max(8, left), Math.max(8, vw - w - 8));
+    let top = r.top - h - 8;
+    if (top < 8) top = Math.min(r.bottom + 8, vh - h - 8);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(Math.max(8, top))}px`;
+}
+
+function renderCard() {
+    const el = document.getElementById('th-card');
+    if (!el) return;
+    const anchor = card.anchor;
+    if (!anchor || !anchor.isConnected || !settings.enabled || state.open) { closeCard(); return; }
+    el.setAttribute('aria-label', t('title'));
+    el.innerHTML = cardHtml();
+    placeCard(el, anchor);
 }
 
 // ---------- wandering hound (walks along the top edge of the input) ----------
@@ -1469,7 +1617,7 @@ function renderWalker() {
         dog.className = 'th-walker';
         dog.setAttribute('role', 'button');
         dog.tabIndex = 0;
-        dog.addEventListener('click', () => (state.open ? closeWindow() : openWindow()));
+        dog.addEventListener('click', () => onHoundTap(dog));
         dog.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dog.click(); } });
         lane.appendChild(dog);
         // With the bar on too, the hound walks on top of the bar.
@@ -1483,10 +1631,12 @@ function renderWalker() {
     const stage = stageOf(pctOf(rec));
     dog.title = `${t('open')} · ${t('stage_' + stage)}`;
     dog.setAttribute('aria-label', dog.title);
-    // Pop the number up for a moment when a new turn comes in.
-    const recT = rec ? `${rec.t}:${rec.est ? 1 : 0}` : null;
-    if (recT && recT !== walk.lastT) { walk.bubbleUntil = Date.now() + 4000; }
-    walk.lastT = recT;
+    // Pop the number up for a moment once a new turn's reply is in (not while it's still coming).
+    if (rec && !rec.awaitingReply) {
+        const recT = `${rec.t}:${rec.est ? 1 : 0}`;
+        if (recT !== walk.lastT) walk.bubbleUntil = Date.now() + 4000;
+        walk.lastT = recT;
+    }
     walk.key = '';
     walkStep();
     if (!walk.timer && !document.hidden) walk.timer = setInterval(walkStep, 140);
@@ -1506,6 +1656,7 @@ function renderDisplay() {
 function render() {
     try { renderDisplay(); } catch (e) { console.warn('[Tokenhound] display', e); }
     try { renderWindow(); } catch (e) { console.warn('[Tokenhound] window', e); }
+    try { renderCard(); } catch (e) { console.warn('[Tokenhound] card', e); }
 }
 
 // ---------- SillyTavern extension settings panel ----------
@@ -1519,6 +1670,8 @@ ${chk('th-p-enabled', t('set_enabled'))}
 ${chk('th-p-bar', t('set_bar'))}
 <label for="th-p-fabstyle">${esc(t('set_fab_style'))}</label>
 <select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+<label for="th-p-tap">${esc(t('set_tap'))}</label>
+<select id="th-p-tap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <small class="th-p-hint">${esc(t('set_display_hint'))}</small>
 <div class="th-p-row"><div id="th-p-resetpos" class="menu_button">${esc(t('set_reset_pos'))}</div></div>
 ${chk('th-p-usage', t('set_usage'))}
@@ -1545,6 +1698,7 @@ function syncPanel() {
     $('th-p-display').value = settings.display;
     $('th-p-bar').checked = settings.barOn;
     $('th-p-fabstyle').value = settings.fabStyle;
+    $('th-p-tap').value = settings.tapOpens;
     $('th-p-sync').checked = settings.serverSync;
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
@@ -1572,6 +1726,7 @@ function buildPanel() {
             case 'th-p-display': settings.display = el.value; break;
             case 'th-p-bar': settings.barOn = el.checked; break;
             case 'th-p-fabstyle': settings.fabStyle = el.value; break;
+            case 'th-p-tap': settings.tapOpens = el.value; closeCard(); break;
             case 'th-p-sync':
                 settings.serverSync = el.checked;
                 syncPanel();
