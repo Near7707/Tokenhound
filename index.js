@@ -5,13 +5,14 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
 const POS_KEY = 'tokenhound:btnpos';
 const DISPLAYS = ['button', 'walk', 'menu'];
+const FAB_STYLES = ['line', 'ring', 'plain'];
 const SERVER_PREFIX = 'tokenhound-';
 const SERVER_INDEX = 'tokenhound-index.json';
 const SERVER_FORMAT = 1;
@@ -20,6 +21,7 @@ const DEFAULTS = Object.freeze({
     enabled: true,
     display: 'walk',
     barOn: false,
+    fabStyle: 'line',
     lang: 'auto',
     readUsage: true,
     serverSync: true,
@@ -35,7 +37,7 @@ const COLORS = {
     examples: '#5DCAA5',
     wi: '#EF9F27',
     ext: '#378ADD',
-    history: '#5F5E5A',
+    history: '#97C459',
 };
 const PART_ORDER = ['preset', 'card', 'persona', 'examples', 'wi', 'ext', 'history'];
 const STAGE_COLORS = ['#7F77DD', '#7F77DD', '#EF9F27', '#E24B4A'];
@@ -152,6 +154,7 @@ function loadSettings() {
     if (s.display === 'bar') { s.display = 'menu'; s.barOn = true; }
     if (!DISPLAYS.includes(s.display)) s.display = DEFAULTS.display;
     s.barOn = !!s.barOn;
+    if (!FAB_STYLES.includes(s.fabStyle)) s.fabStyle = DEFAULTS.fabStyle;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -1119,6 +1122,10 @@ function displayOptions() {
     return DISPLAYS.map(d => [d, t('disp_' + d)]);
 }
 
+function fabStyleOptions() {
+    return FAB_STYLES.map(f => [f, t('fab_' + f)]);
+}
+
 function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
@@ -1129,6 +1136,7 @@ function renderQuickSettings() {
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
         + check('th-q-bar', settings.barOn, t('set_bar'))
+        + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
@@ -1251,6 +1259,7 @@ function onWindowChange(e) {
         case 'th-q-enabled': settings.enabled = el.checked; break;
         case 'th-q-display': settings.display = el.value; break;
         case 'th-q-bar': settings.barOn = el.checked; break;
+        case 'th-q-fabstyle': settings.fabStyle = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-lang': settings.lang = el.value; break;
@@ -1374,8 +1383,19 @@ function renderFab() {
     const stage = stageOf(pct);
     fab.title = `${t('open')} · ${t('stage_' + stage)}`;
     fab.setAttribute('aria-label', fab.title);
-    fab.innerHTML = `${houndSvg(stage, 1)}<span class="th-fab-text${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    const look = FAB_STYLES.includes(settings.fabStyle) ? settings.fabStyle : DEFAULTS.fabStyle;
+    const text = `<span class="th-fab-text${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    fab.className = `th-fab th-fab-${look}${fab.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
+    if (look === 'ring') {
+        fab.innerHTML = `${donutSvg(rec, 56, 4)}<span class="th-fab-in">${houndSvg(stage, 1)}${text}</span>`;
+    } else if (look === 'line') {
+        fab.innerHTML = `<span class="th-fab-row">${houndSvg(stage, 1)}${text}</span><span class="th-fab-track">${barSegments(rec)}</span>`;
+    } else {
+        fab.innerHTML = `${houndSvg(stage, 1)}${text}`;
+    }
+    // The look changes the size, so keep it inside the screen.
     if (!fab.style.left) placeFab(fab);
+    else if (!fab.classList.contains('th-dragging')) placeFab(fab, parseFloat(fab.style.left) || 0, parseFloat(fab.style.top) || 0);
 }
 
 // ---------- wandering hound (walks along the top edge of the input) ----------
@@ -1497,6 +1517,8 @@ ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 ${chk('th-p-bar', t('set_bar'))}
+<label for="th-p-fabstyle">${esc(t('set_fab_style'))}</label>
+<select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <small class="th-p-hint">${esc(t('set_display_hint'))}</small>
 <div class="th-p-row"><div id="th-p-resetpos" class="menu_button">${esc(t('set_reset_pos'))}</div></div>
 ${chk('th-p-usage', t('set_usage'))}
@@ -1522,6 +1544,7 @@ function syncPanel() {
     $('th-p-enabled').checked = settings.enabled;
     $('th-p-display').value = settings.display;
     $('th-p-bar').checked = settings.barOn;
+    $('th-p-fabstyle').value = settings.fabStyle;
     $('th-p-sync').checked = settings.serverSync;
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
@@ -1548,6 +1571,7 @@ function buildPanel() {
             case 'th-p-enabled': settings.enabled = el.checked; break;
             case 'th-p-display': settings.display = el.value; break;
             case 'th-p-bar': settings.barOn = el.checked; break;
+            case 'th-p-fabstyle': settings.fabStyle = el.value; break;
             case 'th-p-sync':
                 settings.serverSync = el.checked;
                 syncPanel();

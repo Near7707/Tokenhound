@@ -8,7 +8,7 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 
 ## Features
 
-- **Choose how it shows on screen**: a hound that wanders along the input box (default), a small button you can drag anywhere, or nothing at all (open it from the wand menu). You can also turn on a bar above the input, alone or together with the others. The bar shows each part in its own color. Tap the hound to open the window.
+- **Choose how it shows on screen**: a hound that wanders along the input box (default), a small button you can drag anywhere, or nothing at all (open it from the wand menu). You can also turn on a bar above the input, alone or together with the others. The bar shows each part in its own color. The small button can show a tiny bar under the hound, a ring around it, or just the number. Tap the hound to open the window.
 - **Breakdown**: tokens and percent for each part of the prompt. Shows the change from the last turn.
 - **World info and extensions**: tap to see each world info entry and each extension prompt.
 - **Chat history**: how many messages fit, and how many older ones were left out. Hidden messages aren't sent to the AI, so they aren't counted.
@@ -59,7 +59,7 @@ Group chats are supported. The card row shows the name of the character who is s
 
 ### 기능
 
-- **화면 표시 방식 고르기**: 입력칸 위를 돌아다니는 강아지(기본), 끌어서 아무 데나 옮길 수 있는 작은 버튼, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 입력칸 위 막대는 따로 켤 수 있어서 혼자 쓰거나 다른 방식과 같이 쓸 수 있어요. 막대는 항목마다 다른 색으로 나눠 보여 줘요. 하운드를 누르면 창이 열려요.
+- **화면 표시 방식 고르기**: 입력칸 위를 돌아다니는 강아지(기본), 끌어서 아무 데나 옮길 수 있는 작은 버튼, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 입력칸 위 막대는 따로 켤 수 있어서 혼자 쓰거나 다른 방식과 같이 쓸 수 있어요. 막대는 항목마다 다른 색으로 나눠 보여 줘요. 작은 버튼은 하운드 밑 작은 막대, 하운드 둘레 도넛, 숫자만 중에서 모양을 고를 수 있어요. 하운드를 누르면 창이 열려요.
 - **항목별 토큰**: 항목마다 토큰과 비율을 보여 주고, 지난 턴보다 얼마나 늘고 줄었는지도 보여 줘요.
 - **로어북과 확장**: 누르면 로어북 항목별, 확장별로 펼쳐서 볼 수 있어요.
 - **대화 기록**: 메시지가 몇 개 들어갔고, 오래된 메시지가 몇 개 빠졌는지 보여 줘요. 숨긴 메시지는 AI에게 가지 않아서 세지 않아요.
