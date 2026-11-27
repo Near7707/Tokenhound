@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.3';
+const VERSION = '0.5.4';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1060,12 +1060,14 @@ function pctClass(stage) {
 }
 
 // Small ring split by part, with the number in the middle (wandering hound bubble).
-function donutSvg(rec, size = 30, w = 4) {
+function donutSvg(rec, size = 30, w = 4, filled = false) {
     const r = (size - w) / 2;
     const c = 2 * Math.PI * r;
     const mid = size / 2;
     const ring = (stroke, len, off, extra = '') => `<circle cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${mid} ${mid})"${extra}/>`;
-    let html = `<circle class="th-ring-empty" cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke-width="${w}"/>`;
+    // Toy donuts get a solid middle so they don't look hollow on a big screen.
+    let html = filled ? `<circle class="th-ring-fill" cx="${mid}" cy="${mid}" r="${r}"/>` : '';
+    html += `<circle class="th-ring-empty" cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke-width="${w}"/>`;
     let off = 0;
     if (rec && rec.max) {
         for (const k of PART_ORDER) {
@@ -1704,8 +1706,8 @@ const DOG_W = 28 * WALK_SCALE;
 const DOG_H = 16 * WALK_SCALE;
 // Donut the hound plays with: size, ring width, and where it sits next to the hound.
 const TOYS = {
-    nose: { size: 20, w: 3, left: 25 * WALK_SCALE, bottom: 0, dogBottom: 0 }, // rolled ahead by the nose
-    ride: { size: 28, w: 4, left: 0, bottom: 0, dogBottom: 28 - WALK_SCALE }, // the hound balances on top
+    nose: { size: 20, w: 4, left: 25 * WALK_SCALE, bottom: 0, dogBottom: 0 }, // rolled ahead by the nose
+    ride: { size: 30, w: 6, left: 0, bottom: 0, dogBottom: 30 - WALK_SCALE }, // the hound balances on top
 };
 
 function walkToy() {
@@ -1774,7 +1776,7 @@ function walkStep() {
             dog.innerHTML = `<span class="th-rig" style="width:${w}px;height:${h}px">`
                 + `<span class="th-walk-dog" style="bottom:${toy.dogBottom}px">${sprite}</span>`
                 + `<span class="th-toy th-toy-${settings.walkToy}" style="left:${toy.left}px;bottom:${toy.bottom}px;width:${toy.size}px;height:${toy.size}px">`
-                + `<span class="th-toy-spin">${donutSvg(rec, toy.size, toy.w)}</span>${num}</span></span>`;
+                + `<span class="th-toy-spin">${donutSvg(rec, toy.size, toy.w, true)}</span>${num}</span></span>`;
         } else {
             dog.innerHTML = `<span class="th-rig" style="width:${DOG_W}px;height:${DOG_H}px"><span class="th-walk-dog">${sprite}</span></span>`
                 + `<span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
@@ -1883,7 +1885,7 @@ function drawHouse() {
     let html = `<span class="th-house-art">${houseSvg(frame, HOUSE_SCALE)}`;
     if (!donut) html += `<span class="th-house-sign${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
     html += '</span>';
-    if (donut) html += `<span class="th-house-donut">${donutSvg(rec, HOUSE_DONUT, 4)}${num}</span>`;
+    if (donut) html += `<span class="th-house-donut">${donutSvg(rec, HOUSE_DONUT, 5, true)}${num}</span>`;
     else html += `<span class="th-walk-bubble th-house-bubble${bubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
     el.className = `th-house${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
     el.innerHTML = html;

@@ -12,8 +12,9 @@
     --th-btn-border: color-mix(in srgb, var(--th-fg) 32%, transparent);
     --th-btn-press: color-mix(in srgb, var(--th-fg) 24%, transparent);
     position: fixed;
-    top: 64px;
-    right: 16px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 400px;
     max-width: calc(100vw - 32px);
     height: min(78vh, 720px);
@@ -229,6 +230,20 @@
     text-overflow: ellipsis;
 }
 .th-select option { color: initial; }
+/* Some themes paint every select white with their own arrow. Inside our window
+   the box, arrow and text always follow the window colors. */
+#th-window select.th-select {
+    color: var(--th-fg) !important;
+    -webkit-text-fill-color: var(--th-fg) !important;
+    background-color: var(--th-field) !important;
+    background-image: linear-gradient(45deg, transparent 50%, var(--th-fg) 50%), linear-gradient(135deg, var(--th-fg) 50%, transparent 50%) !important;
+    background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50% !important;
+    background-size: 5px 5px, 5px 5px !important;
+    background-repeat: no-repeat !important;
+    border: 1px solid var(--th-border) !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
 .th-window.th-light .th-select option, .th-window.th-light .th-select option:not(:checked),
 .th-window.th-dark .th-select option, .th-window.th-dark .th-select option:not(:checked) {
     color: var(--th-fg);
@@ -286,6 +301,7 @@
 
 @media (max-width: 700px) {
     .th-window {
+        transform: none;
         border-radius: 0;
         border-left: none;
         border-right: none;
@@ -385,8 +401,8 @@
 /* Donut the hound rolls (nose) or rides (ride); the number never turns or mirrors */
 .th-toy { position: absolute; display: block; }
 .th-toy-spin { display: block; transition: transform 0.14s linear; }
-.th-toy .th-ring-num { font-size: 9px; font-variant-numeric: tabular-nums; }
-.th-toy-ride .th-ring-num { font-size: 10px; }
+.th-toy .th-ring-num { font-size: 9px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.th-toy-ride .th-ring-num { font-size: 11px; }
 .th-walker.th-flip .th-toy .th-ring-num { transform: scaleX(-1); }
 @media (prefers-reduced-motion: reduce) { .th-toy-spin { transition: none; } }
 .th-walk-bubble {
@@ -410,6 +426,7 @@
     pointer-events: none;
 }
 .th-ring { display: block; }
+.th-ring-fill { fill: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.9)); }
 .th-ring-empty { stroke: color-mix(in srgb, var(--SmartThemeBodyColor, #888) 22%, transparent); }
 .th-ring-reply { color: var(--SmartThemeBodyColor, #888); opacity: 0.45; }
 .th-ring-num {
@@ -554,6 +571,6 @@
 .th-house-sign.th-pct3 { color: #B36F10; }
 .th-house-sign.th-pct4 { color: #C83A39; }
 .th-house-donut { position: relative; display: block; flex: none; width: 26px; height: 26px; }
-.th-house-donut .th-ring-num { font-size: 9px; font-variant-numeric: tabular-nums; }
+.th-house-donut .th-ring-num { font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (hover: hover) { .th-house:hover .th-house-bubble { opacity: 1; } }
 .th-house:focus-visible .th-house-bubble { opacity: 1; }
