@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -888,7 +888,7 @@ function bindEvents() {
     on('GENERATION_ENDED', onGenerationDone);
     on('GENERATION_STOPPED', onGenerationDone);
     on('CHAT_CHANGED', onChatChanged);
-    on('SETTINGS_UPDATED', () => { renderBar(); });
+    on('SETTINGS_UPDATED', () => { renderDisplay(); });
     eventsBound = true;
 }
 
