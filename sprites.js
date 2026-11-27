@@ -136,8 +136,20 @@ const HOUSE = {
     ],
 };
 
+// Header hound extras: a tail-swing frame, the sniff arcs alone, and the sleepy hound split into body and zz.
+function buildParts(stages) {
+    const wag = STAND.slice();
+    [[1, 2], [2, 2], [3, 3], [4, 3], [5, 3]].forEach(([r, c]) => set(wag, r, c, '.'));
+    [[3, 1], [4, 1], [5, 2]].forEach(([r, c]) => set(wag, r, c, 'k'));
+    const sniff = stages[1].map((line, r) => [...line].map((ch, c) => (ch === 'g' && STAND[r][c] === '.' ? 'g' : '.')).join(''));
+    const sleepBody = stages[3].map(line => line.replace(/g/g, '.'));
+    const sleepZ = stages[3].map(line => line.replace(/[kw]/g, '.'));
+    return { wag, sniff, sleepBody, sleepZ };
+}
+
 const STAGES = build();
 const WALK = buildWalk();
+const PARTS = buildParts(STAGES);
 const cache = new Map();
 
 /**
@@ -149,6 +161,16 @@ const cache = new Map();
 export function houndSvg(stage = 1, scale = 1, walking = false) {
     const idx = Math.min(4, Math.max(1, stage)) - 1;
     return draw(`${walking ? 'w' : idx}:${scale}`, walking ? WALK : STAGES[idx], scale);
+}
+
+/**
+ * Returns an SVG string of one header-hound part.
+ * @param {'wag'|'sniff'|'sleepBody'|'sleepZ'} part
+ * @param {number} scale pixels per grid cell
+ */
+export function houndPartSvg(part, scale = 1) {
+    const rows = PARTS[part] || STAND;
+    return draw(`p${part}:${scale}`, rows, scale);
 }
 
 /**

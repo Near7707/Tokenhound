@@ -2,10 +2,10 @@
 // Read-only: it never adds anything to the prompt and never edits chats or cards.
 
 import { STRINGS } from './i18n.js';
-import { houndSvg, houseSvg } from './sprites.js';
+import { houndSvg, houseSvg, houndPartSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.19';
+const VERSION = '0.5.20';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1796,7 +1796,7 @@ function ensureWindow() {
     win.id = 'th-window';
     win.className = 'th-window';
     win.setAttribute('role', 'dialog');
-    win.innerHTML = `<div class="th-head"><button class="th-icon" data-act="back" hidden></button><span class="th-logo">${houndSvg(1, 1.25)}</span><b class="th-title th-ellipsis"></b><span class="th-paneslot"></span><span class="th-spacer"></span><button class="th-icon" data-act="settings"><i class="fa-solid fa-gear"></i></button><button class="th-icon" data-act="close"><i class="fa-solid fa-xmark"></i></button></div><div class="th-body"></div>`;
+    win.innerHTML = `<div class="th-head"><button class="th-icon" data-act="back" hidden></button><span class="th-logo" data-act="hop"></span><b class="th-title th-ellipsis"></b><span class="th-paneslot"></span><span class="th-spacer"></span><button class="th-icon" data-act="settings"><i class="fa-solid fa-gear"></i></button><button class="th-icon" data-act="close"><i class="fa-solid fa-xmark"></i></button></div><div class="th-body"></div>`;
     document.body.appendChild(win);
     win.addEventListener('click', onWindowClick);
     win.addEventListener('change', onWindowChange);
@@ -1834,12 +1834,63 @@ function openWindow() {
     ensureWindow();
     render();
     sizeWindow();
+    logoWalk();
     pullLog();
 }
 
 function closeWindow() {
     state.open = false;
+    clearTimeout(logoTimer);
+    logoTimer = null;
     document.getElementById('th-window')?.remove();
+}
+
+// Header hound: walks in place for a moment when the window opens, then idles by mood; a tap makes it hop.
+let logoTimer = null;
+const LOGO_WALK_MS = 2000;
+
+function logoHtml(stage, scale) {
+    const f = (svg) => `<span class="th-lg-f">${svg}</span>`;
+    let pose;
+    if (stage === 2) pose = f(houndSvg(1, scale)) + f(houndPartSvg('sniff', scale));
+    else if (stage === 3) pose = f(houndSvg(3, scale));
+    else if (stage === 4) pose = f(houndPartSvg('sleepBody', scale)) + f(houndPartSvg('sleepZ', scale));
+    else pose = f(houndSvg(1, scale)) + f(houndPartSvg('wag', scale));
+    const walking = f(houndSvg(1, scale, true)) + f(houndSvg(1, scale));
+    return `<span class="th-lg-pose th-pose${stage}">${pose}</span><span class="th-lg-walk">${walking}</span>`;
+}
+
+function paintLogo(el, stage, scale) {
+    if (!el) return;
+    const key = `${stage}:${scale}`;
+    if (el.dataset.key === key) return; // keep the running animation
+    el.dataset.key = key;
+    el.style.setProperty('--th-cell', `${scale}px`);
+    el.innerHTML = logoHtml(stage, scale);
+}
+
+function logoWalk() {
+    const el = document.querySelector('#th-window .th-logo');
+    clearTimeout(logoTimer);
+    if (!el || reducedMotion()) return;
+    el.classList.add('th-walking');
+    logoTimer = setTimeout(() => {
+        logoTimer = null;
+        document.querySelector('#th-window .th-logo')?.classList.remove('th-walking');
+    }, LOGO_WALK_MS);
+}
+
+function logoHop(el) {
+    if (!el || reducedMotion()) return;
+    el.classList.remove('th-hop');
+    void el.offsetWidth; // restart the hop if tapped again mid-air
+    el.classList.add('th-hop');
+    const done = (e) => {
+        if (e.target !== el) return;
+        el.classList.remove('th-hop');
+        el.removeEventListener('animationend', done);
+    };
+    el.addEventListener('animationend', done);
 }
 
 function renderWindow() {
@@ -1860,7 +1911,7 @@ function renderWindow() {
     closeBtn.setAttribute('aria-label', t('close'));
     closeBtn.title = t('close');
     const rec = shown();
-    win.querySelector('.th-logo').innerHTML = houndSvg(stageOf(pctOf(rec)), isMobile() ? 1.25 : 2);
+    paintLogo(win.querySelector('.th-logo'), stageOf(pctOf(rec)), isMobile() ? 1.25 : 2);
     title.textContent = state.view === 'settings' ? t('settings') : (state.view === 'log' ? t('btn_log') : t('title'));
     win.querySelector('.th-paneslot').innerHTML = state.view === 'main' ? paneHtml() : '';
     const scroll = body.scrollTop;
@@ -1913,6 +1964,7 @@ function onWindowClick(e) {
     }
     switch (el.dataset.act) {
         case 'close': closeWindow(); break;
+        case 'hop': logoHop(el); break;
         case 'settings': state.view = state.view === 'settings' ? 'main' : 'settings'; render(); break;
         case 'back': state.view = 'main'; render(); break;
         case 'pane': state.paneMenu = !state.paneMenu; render(); if (state.paneMenu) document.querySelector('#th-window [data-act="pane-' + state.pane + '"]')?.focus(); break;
