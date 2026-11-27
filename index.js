@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.2';
+const VERSION = '0.5.3';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1834,7 +1834,7 @@ const HOUSE_STEPS = [['peek', 6000], ['rest', 25000], ['sleep', 0]];
 
 function stopHouse() {
     if (house.timer) { clearTimeout(house.timer); house.timer = null; }
-    document.getElementById('th-house')?.remove();
+    document.getElementById('th-house-lane')?.remove();
     house.key = '';
 }
 
@@ -1889,20 +1889,84 @@ function drawHouse() {
     el.innerHTML = html;
 }
 
+// The doghouse sits on the same line as the wandering hound (the top edge of the
+// input, or on the bar). Drag it left or right; the spot is kept per device.
+function houseX(lane, el) {
+    const max = Math.max(4, lane.clientWidth - (el.offsetWidth || 50) - 4);
+    let ratio = null;
+    try {
+        const p = JSON.parse(localStorage.getItem(HOUSE_POS_KEY) || 'null');
+        if (p && Number.isFinite(p.x)) ratio = p.x;
+    } catch { /* ignore */ }
+    return ratio === null ? 4 : Math.min(max, Math.max(4, ratio * max));
+}
+
+function bindHouseDrag(el) {
+    let drag = null;
+    let moved = false;
+    const lane = () => el.parentNode;
+    const end = () => {
+        if (drag && moved && lane()) {
+            const max = Math.max(4, lane().clientWidth - el.offsetWidth - 4);
+            const x = parseFloat(el.style.left) || 4;
+            try { localStorage.setItem(HOUSE_POS_KEY, JSON.stringify({ x: max > 4 ? (x - 4) / (max - 4) : 0 })); } catch { /* ignore */ }
+        }
+        drag = null;
+        el.classList.remove('th-dragging');
+    };
+    el.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, left: parseFloat(el.style.left) || 4 };
+        moved = false;
+        try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    el.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id || !lane()) return;
+        const dx = e.clientX - drag.sx;
+        if (!moved && Math.hypot(dx, e.clientY - drag.sy) < 6) return;
+        if (!moved) closeCard();
+        moved = true;
+        el.classList.add('th-dragging');
+        const max = Math.max(4, lane().clientWidth - el.offsetWidth - 4);
+        el.style.left = `${Math.round(Math.min(max, Math.max(4, drag.left + dx)))}px`;
+    });
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    window.addEventListener('blur', end);
+    window.addEventListener('pagehide', end);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) end(); });
+    el.addEventListener('click', (e) => {
+        if (moved) { moved = false; e.preventDefault(); return; }
+        onHoundTap(el);
+    });
+}
+
 function renderHouse() {
+    const anchor = document.getElementById('send_form');
+    if (!anchor) return;
+    let lane = document.getElementById('th-house-lane');
     let el = document.getElementById('th-house');
-    if (!el) {
+    // With the bar on, the house sits on top of the bar.
+    const below = document.getElementById('th-bar');
+    const ref = below && below.parentNode === anchor.parentNode ? below : anchor;
+    if (!lane || !lane.isConnected || !el) {
+        lane?.remove();
+        lane = document.createElement('div');
+        lane.id = 'th-house-lane';
+        lane.className = 'th-lane';
         el = document.createElement('div');
         el.id = 'th-house';
         el.className = 'th-house';
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHoundTap(el); } });
-        document.body.appendChild(el);
-        bindFabDrag(el, HOUSE_POS_KEY);
+        lane.appendChild(el);
+        bindHouseDrag(el);
         house.since = Date.now();
         house.key = '';
     }
+    if (lane.nextSibling !== ref) anchor.parentNode.insertBefore(lane, ref);
     // A finished reply wakes the hound: it peeks out and shows the number for a moment.
     const rec = shown();
     if (rec && !rec.awaitingReply) {
@@ -1914,8 +1978,7 @@ function renderHouse() {
         house.lastT = recT;
     }
     drawHouse();
-    if (!el.style.left) placeFab(el);
-    else if (!el.classList.contains('th-dragging')) placeFab(el, parseFloat(el.style.left) || 0, parseFloat(el.style.top) || 0);
+    if (!el.classList.contains('th-dragging')) el.style.left = `${Math.round(houseX(lane, el))}px`;
     scheduleHouse();
 }
 
@@ -2068,10 +2131,10 @@ function buildPanel() {
         const id = e.target?.closest?.('.menu_button')?.id;
         if (id === 'th-p-resetpos') {
             try { localStorage.removeItem(POS_KEY); localStorage.removeItem(HOUSE_POS_KEY); } catch { /* ignore */ }
-            for (const id of ['th-fab', 'th-house']) {
-                const el = document.getElementById(id);
-                if (el) placeFab(el);
-            }
+            const fab = document.getElementById('th-fab');
+            if (fab) placeFab(fab);
+            const home = document.getElementById('th-house');
+            if (home) home.style.left = '4px';
             toast('success', t('pos_reset'));
             return;
         }
@@ -2118,14 +2181,36 @@ function onResize() {
     const typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
     if (!typing) state.baseHeight = window.innerHeight;
     if (state.open) sizeWindow();
-    for (const id of ['th-fab', 'th-house']) {
-        const el = document.getElementById(id);
-        if (el && !el.classList.contains('th-dragging')) placeFab(el);
-    }
+    const fab = document.getElementById('th-fab');
+    if (fab && !fab.classList.contains('th-dragging')) placeFab(fab);
+    const home = document.getElementById('th-house');
+    if (home && home.parentNode && !home.classList.contains('th-dragging')) home.style.left = `${Math.round(houseX(home.parentNode, home))}px`;
+}
+
+// iPhone Safari can keep using an old copy of style.css after an update while
+// the script is already new. Load our own stylesheet again with the version in
+// the address, so every update brings its styles along.
+function refreshStyle() {
+    try {
+        const url = new URL('./style.css', import.meta.url);
+        const want = `${url.origin}${url.pathname}?v=${VERSION}`;
+        const old = [...document.querySelectorAll('link[rel="stylesheet"]')].filter((l) => {
+            try { return new URL(l.href, location.href).pathname === url.pathname; } catch { return false; }
+        });
+        if (old.some(l => l.href === want)) return;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = want;
+        link.id = 'th-style';
+        link.addEventListener('load', () => { for (const l of old) l.disabled = true; });
+        if (old.length) old[old.length - 1].after(link);
+        else document.head.appendChild(link);
+    } catch { /* keep whatever SillyTavern loaded */ }
 }
 
 async function init() {
     try {
+        refreshStyle();
         loadSettings();
         bindEvents();
         installFetchWatch();
