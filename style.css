@@ -230,8 +230,10 @@
     padding: 8px 10px;
     border: 1px solid var(--th-border);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--th-fg) 6%, transparent);
+    background: color-mix(in srgb, var(--th-fg) var(--th-detail-mix, 9%), transparent);
 }
+.th-light .th-logdetail { --th-detail-mix: 6%; }
+.th-dark .th-logdetail { --th-detail-mix: 12%; border-color: #4a4a4d; }
 .th-logdetail .th-stack { margin: 0 0 4px; }
 .th-logdetail .th-rows { margin-top: 6px; }
 .th-logmain { flex: 1; min-width: 0; }

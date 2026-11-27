@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.14';
+const VERSION = '0.5.15';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1145,7 +1145,7 @@ function partsHtml(rec, prev, isOpen, keyOf) {
         }
         if (k === 'history') {
             const cut = Math.max(0, (rec.hist?.all || 0) - (rec.hist?.inc || 0));
-            html += `<div class="th-sub ${cut ? 'th-warntext' : 'th-muted'}">${esc(cut ? t('history_cut', { n: cut }) : t('history_all'))}</div>`;
+            if (cut) html += `<div class="th-sub th-warntext">${esc(t('history_cut', { n: cut }))}</div>`;
             if (rec.hist?.hidden) html += `<div class="th-sub th-muted">${esc(t('history_hidden', { n: rec.hist.hidden }))}</div>`;
         }
     }
