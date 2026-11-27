@@ -8,10 +8,10 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 
 ## Features
 
-- **Choose how it shows on screen**: a small button you can drag anywhere (default), a bar above the input, a hound that wanders along the input box, or nothing at all (open it from the wand menu). Tap the hound to open the window.
+- **Choose how it shows on screen**: a hound that wanders along the input box (default), a small button you can drag anywhere, or nothing at all (open it from the wand menu). You can also turn on a bar above the input, alone or together with the others. The bar shows each part in its own color. Tap the hound to open the window.
 - **Breakdown**: tokens and percent for each part of the prompt. Shows the change from the last turn.
 - **World info and extensions**: tap to see each world info entry and each extension prompt.
-- **Chat history**: how many messages fit, and how many older ones were left out.
+- **Chat history**: how many messages fit, and how many older ones were left out. Hidden messages aren't sent to the AI, so they aren't counted.
 - **Prompt cache hints**: where the prompt first changed since the last turn, for example "new world info entry" or "older messages scrolled out".
 - **Usage reported by the API**: input, cache hit, output, and thinking tokens, when your API reports them.
 - **Reply size**: estimated tokens of the last reply and its thinking part.
@@ -59,10 +59,10 @@ Group chats are supported. The card row shows the name of the character who is s
 
 ### 기능
 
-- **화면 표시 방식 고르기**: 끌어서 아무 데나 옮길 수 있는 작은 버튼(기본), 입력칸 위 막대, 입력칸 위를 돌아다니는 강아지, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 하운드를 누르면 창이 열려요.
+- **화면 표시 방식 고르기**: 입력칸 위를 돌아다니는 강아지(기본), 끌어서 아무 데나 옮길 수 있는 작은 버튼, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 입력칸 위 막대는 따로 켤 수 있어서 혼자 쓰거나 다른 방식과 같이 쓸 수 있어요. 막대는 항목마다 다른 색으로 나눠 보여 줘요. 하운드를 누르면 창이 열려요.
 - **항목별 토큰**: 항목마다 토큰과 비율을 보여 주고, 지난 턴보다 얼마나 늘고 줄었는지도 보여 줘요.
 - **로어북과 확장**: 누르면 로어북 항목별, 확장별로 펼쳐서 볼 수 있어요.
-- **대화 기록**: 메시지가 몇 개 들어갔고, 오래된 메시지가 몇 개 빠졌는지 보여 줘요.
+- **대화 기록**: 메시지가 몇 개 들어갔고, 오래된 메시지가 몇 개 빠졌는지 보여 줘요. 숨긴 메시지는 AI에게 가지 않아서 세지 않아요.
 - **프롬프트 캐시 힌트**: 지난 턴과 비교해서 프롬프트가 처음 바뀐 곳을 알려 줘요. 예를 들면 "새 로어북 항목"이나 "오래된 메시지가 밀려남" 같은 거예요.
 - **API가 알려 준 사용량**: API가 알려 주면 입력, 캐시 적중, 출력, 생각 토큰을 보여 줘요.
 - **답 크기**: 마지막 답과 생각 부분이 몇 토큰인지 예상해서 보여 줘요.

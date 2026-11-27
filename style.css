@@ -101,11 +101,13 @@
     border-radius: 4px;
     overflow: hidden;
     margin: 6px 0 4px;
-    background: color-mix(in srgb, var(--th-fg) 12%, transparent);
+    /* Empty space is an outline only, so dark gray history and the reply stripes stand out. */
+    background: transparent;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--th-fg) 28%, transparent);
 }
 .th-stack > span, .th-mini > span { display: block; height: 100%; flex: none; }
 .th-seg-reply {
-    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--th-fg) 30%, transparent) 0 3px, transparent 3px 6px);
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--th-fg) 60%, transparent) 0 2px, transparent 2px 5px);
 }
 
 .th-warn {
@@ -231,9 +233,18 @@
     height: 6px;
     border-radius: 3px;
     overflow: hidden;
-    background: color-mix(in srgb, var(--SmartThemeBodyColor, #888) 18%, transparent);
+    display: flex;
+    --th-fg: var(--SmartThemeBodyColor, #888);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--SmartThemeBodyColor, #888) 30%, transparent);
 }
-.th-bar-track > span { display: block; height: 100%; }
+.th-bar-track > span { display: block; height: 100%; flex: none; }
+.th-bar-track > .th-seg-reply {
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--SmartThemeBodyColor, #888) 60%, transparent) 0 1.5px, transparent 1.5px 3.5px);
+}
+
+/* Percent text turns warm only when the context is getting full */
+.th-pct3 { color: #D98A1C; font-weight: 600; }
+.th-pct4 { color: #E24B4A; font-weight: 600; }
 .th-bar-text { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.9; }
 
 /* Wand menu */
@@ -306,8 +317,11 @@
     bottom: calc(100% + 2px);
     left: 50%;
     transform: translateX(-50%);
-    padding: 1px 6px;
-    border-radius: 6px;
+    padding: 2px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.5));
     background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.9));
     color: var(--SmartThemeBodyColor, inherit);
@@ -317,6 +331,18 @@
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
+}
+.th-ring { display: block; }
+.th-ring-empty { stroke: color-mix(in srgb, var(--SmartThemeBodyColor, #888) 22%, transparent); }
+.th-ring-reply { color: var(--SmartThemeBodyColor, #888); opacity: 0.45; }
+.th-ring-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
 }
 .th-walk-bubble.th-show,
 .th-walker:hover .th-walk-bubble,

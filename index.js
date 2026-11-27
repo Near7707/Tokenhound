@@ -5,20 +5,21 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
 const POS_KEY = 'tokenhound:btnpos';
-const DISPLAYS = ['button', 'bar', 'walk', 'menu'];
+const DISPLAYS = ['button', 'walk', 'menu'];
 const SERVER_PREFIX = 'tokenhound-';
 const SERVER_INDEX = 'tokenhound-index.json';
 const SERVER_FORMAT = 1;
 
 const DEFAULTS = Object.freeze({
     enabled: true,
-    display: 'button',
+    display: 'walk',
+    barOn: false,
     lang: 'auto',
     readUsage: true,
     serverSync: true,
@@ -34,7 +35,7 @@ const COLORS = {
     examples: '#5DCAA5',
     wi: '#EF9F27',
     ext: '#378ADD',
-    history: '#888780',
+    history: '#5F5E5A',
 };
 const PART_ORDER = ['preset', 'card', 'persona', 'examples', 'wi', 'ext', 'history'];
 const STAGE_COLORS = ['#7F77DD', '#7F77DD', '#EF9F27', '#E24B4A'];
@@ -147,8 +148,11 @@ function loadSettings() {
     if (!Array.isArray(s.stages) || s.stages.length !== 3) s.stages = DEFAULTS.stages.slice();
     s.stages = s.stages.map(n => Math.min(100, Math.max(1, Number(n) || 50)));
     s.logSize = [20, 50, 100].includes(Number(s.logSize)) ? Number(s.logSize) : 50;
+    // 0.2.x "bar" display became its own switch: keep the screen looking the same.
+    if (s.display === 'bar') { s.display = 'menu'; s.barOn = true; }
     if (!DISPLAYS.includes(s.display)) s.display = DEFAULTS.display;
-    delete s.showBar; // 0.1.0 setting, replaced by "display"
+    s.barOn = !!s.barOn;
+    delete s.showBar; // 0.1.0 setting
     settings = s;
 }
 
@@ -569,7 +573,12 @@ async function analyze(msgs, cur) {
     // Chat history: walk back from the newest message until it stops matching.
     const chat = Array.isArray(c.chat) ? c.chat : [];
     const visible = [];
-    for (let i = 0; i < chat.length; i++) if (chat[i] && !chat[i].is_system && String(chat[i].mes ?? '').trim()) visible.push(i);
+    let hidden = 0;
+    for (let i = 0; i < chat.length; i++) {
+        if (!chat[i] || !String(chat[i].mes ?? '').trim()) continue;
+        if (chat[i].is_system) hidden++;
+        else visible.push(i);
+    }
     let inc = 0;
     let misses = 0;
     let histStart = Infinity;
@@ -618,7 +627,7 @@ async function analyze(msgs, cur) {
         wi: wi.map(({ uid, world, n, tok }) => ({ uid, world, n, tok })),
         ext,
         top: items.slice(0, 3),
-        hist: { inc, all: visible.length },
+        hist: { inc, all: visible.length, hidden },
         model: info.model,
         profile: info.profile,
         cardName,
@@ -921,6 +930,30 @@ function pctOf(rec) {
     return rec && rec.max ? Math.round((rec.total / rec.max) * 100) : 0;
 }
 
+// Text tint for the fuller stages (calm stages keep the normal text color).
+function pctClass(stage) {
+    return stage >= 3 ? ` th-pct${stage}` : '';
+}
+
+// Small ring split by part, with the number in the middle (wandering hound bubble).
+function donutSvg(rec, size = 30, w = 4) {
+    const r = (size - w) / 2;
+    const c = 2 * Math.PI * r;
+    const mid = size / 2;
+    const ring = (stroke, len, off, extra = '') => `<circle cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-dasharray="${len.toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${mid} ${mid})"${extra}/>`;
+    let html = `<circle class="th-ring-empty" cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke-width="${w}"/>`;
+    let off = 0;
+    if (rec && rec.max) {
+        for (const k of PART_ORDER) {
+            const len = Math.min(c - off, ((rec.parts[k] || 0) / rec.max) * c);
+            if (len > 0) { html += ring(COLORS[k], len, off); off += len; }
+        }
+        const rl = Math.min(c - off, ((rec.reply || 0) / rec.max) * c);
+        if (rl > 0) html += ring('currentColor', rl, off, ' class="th-ring-reply"');
+    }
+    return `<svg class="th-ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true" focusable="false">${html}</svg>`;
+}
+
 function barSegments(rec) {
     if (!rec || !rec.max) return '';
     let html = '';
@@ -996,6 +1029,7 @@ function renderMain() {
         if (k === 'history') {
             const cut = Math.max(0, (rec.hist?.all || 0) - (rec.hist?.inc || 0));
             html += `<div class="th-sub ${cut ? 'th-warntext' : 'th-muted'}">${esc(cut ? t('history_cut', { n: cut }) : t('history_all'))}</div>`;
+            if (rec.hist?.hidden) html += `<div class="th-sub th-muted">${esc(t('history_hidden', { n: rec.hist.hidden }))}</div>`;
         }
     }
     html += '</div>';
@@ -1094,6 +1128,7 @@ function renderQuickSettings() {
     return '<div class="th-settings">'
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
+        + check('th-q-bar', settings.barOn, t('set_bar'))
         + check('th-q-usage', settings.readUsage, t('set_usage'))
         + `<div class="th-small th-muted th-hint">${esc(t('set_usage_hint'))}</div>`
         + check('th-q-estimate', settings.showEstimate, t('set_estimate'))
@@ -1215,6 +1250,7 @@ function onWindowChange(e) {
     switch (el.id) {
         case 'th-q-enabled': settings.enabled = el.checked; break;
         case 'th-q-display': settings.display = el.value; break;
+        case 'th-q-bar': settings.barOn = el.checked; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-lang': settings.lang = el.value; break;
@@ -1246,8 +1282,8 @@ function renderBar() {
     const stage = stageOf(pct);
     bar.title = `${t('open')} · ${t('stage_' + stage)}`;
     bar.setAttribute('aria-label', bar.title);
-    bar.innerHTML = `${houndSvg(stage, 1.25)}<span class="th-bar-track"><span style="width:${Math.min(100, pct)}%;background:${STAGE_COLORS[stage - 1]}"></span></span>`
-        + `<span class="th-bar-text">${rec ? `${pct}% · ${short(rec.total)}${rec.est ? ' ~' : ''}` : '—'}</span>`;
+    bar.innerHTML = `${houndSvg(stage, 1.25)}<span class="th-bar-track">${barSegments(rec)}</span>`
+        + `<span class="th-bar-text">${rec ? `<span class="th-bar-pct${pctClass(stage)}">${pct}%</span> · ${short(rec.total)}${rec.est ? ' ~' : ''}` : '—'}</span>`;
 }
 
 // ---------- small button (drag to move, position kept per device) ----------
@@ -1338,7 +1374,7 @@ function renderFab() {
     const stage = stageOf(pct);
     fab.title = `${t('open')} · ${t('stage_' + stage)}`;
     fab.setAttribute('aria-label', fab.title);
-    fab.innerHTML = `${houndSvg(stage, 1)}<span class="th-fab-text">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    fab.innerHTML = `${houndSvg(stage, 1)}<span class="th-fab-text${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
     if (!fab.style.left) placeFab(fab);
 }
 
@@ -1395,7 +1431,8 @@ function walkStep() {
     const sprite = frame === 'walk' ? houndSvg(1, WALK_SCALE, true)
         : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, WALK_SCALE);
     dog.classList.toggle('th-flip', walk.dir < 0);
-    dog.innerHTML = `<span class="th-walk-dog">${sprite}</span><span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    const label = rec ? `${pct}${rec.est ? '~' : ''}` : '—';
+    dog.innerHTML = `<span class="th-walk-dog">${sprite}</span><span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${donutSvg(rec)}<span class="th-ring-num${pctClass(stage)}">${label}</span></span>`;
 }
 
 function renderWalker() {
@@ -1415,7 +1452,10 @@ function renderWalker() {
         dog.addEventListener('click', () => (state.open ? closeWindow() : openWindow()));
         dog.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dog.click(); } });
         lane.appendChild(dog);
-        anchor.parentNode.insertBefore(lane, anchor);
+        // With the bar on too, the hound walks on top of the bar.
+        const below = document.getElementById('th-bar');
+        const ref = below && below.parentNode === anchor.parentNode ? below : anchor;
+        anchor.parentNode.insertBefore(lane, ref);
         walk.key = '';
     }
     const rec = shown();
@@ -1434,11 +1474,12 @@ function renderWalker() {
 
 function renderDisplay() {
     const mode = settings.enabled ? settings.display : 'menu';
-    if (mode !== 'bar') document.getElementById('th-bar')?.remove();
+    const barOn = settings.enabled && settings.barOn;
+    if (!barOn) document.getElementById('th-bar')?.remove();
     if (mode !== 'button') document.getElementById('th-fab')?.remove();
     if (mode !== 'walk') stopWalker();
-    if (mode === 'bar') renderBar();
-    else if (mode === 'button') renderFab();
+    if (barOn) renderBar();
+    if (mode === 'button') renderFab();
     else if (mode === 'walk') renderWalker();
 }
 
@@ -1455,6 +1496,7 @@ function panelHtml() {
 ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+${chk('th-p-bar', t('set_bar'))}
 <small class="th-p-hint">${esc(t('set_display_hint'))}</small>
 <div class="th-p-row"><div id="th-p-resetpos" class="menu_button">${esc(t('set_reset_pos'))}</div></div>
 ${chk('th-p-usage', t('set_usage'))}
@@ -1479,6 +1521,7 @@ function syncPanel() {
     if (!$('th-p-enabled')) return;
     $('th-p-enabled').checked = settings.enabled;
     $('th-p-display').value = settings.display;
+    $('th-p-bar').checked = settings.barOn;
     $('th-p-sync').checked = settings.serverSync;
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
@@ -1504,6 +1547,7 @@ function buildPanel() {
         switch (el.id) {
             case 'th-p-enabled': settings.enabled = el.checked; break;
             case 'th-p-display': settings.display = el.value; break;
+            case 'th-p-bar': settings.barOn = el.checked; break;
             case 'th-p-sync':
                 settings.serverSync = el.checked;
                 syncPanel();
