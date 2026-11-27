@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.8';
+const VERSION = '0.5.9';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1453,7 +1453,7 @@ function renderBar() {
     const stage = stageOf(pct);
     bar.title = `${t('open')} · ${t('stage_' + stage)}`;
     bar.setAttribute('aria-label', bar.title);
-    bar.innerHTML = `${settings.barHound ? houndSvg(stage, 1.25) : ''}<span class="th-bar-track">${barSegments(rec)}</span>`
+    bar.innerHTML = `${settings.barHound ? houndSvg(stage, isMobile() ? 1.25 : 2) : ''}<span class="th-bar-track">${barSegments(rec)}</span>`
         + `<span class="th-bar-text">${rec ? `<span class="th-bar-pct${pctClass(stage)}">${pct}%</span> · ${short(rec.total)}${rec.est ? ' ~' : ''}` : '—'}</span>`;
 }
 
@@ -1711,7 +1711,7 @@ const WALK_PHONE = {
 const WALK_PC = {
     scale: 2,
     nose: { size: 32, w: 6, font: 13 },
-    ride: { size: 48, w: 10, font: 16 },
+    ride: { size: 38, w: 8, font: 14 },
 };
 
 function walkDims() {

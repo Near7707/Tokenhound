@@ -292,6 +292,8 @@
     user-select: none;
     touch-action: manipulation;
 }
+/* PC: the bar hound is drawn at 2x (32px tall), so the bar row grows to fit it */
+@media (min-width: 701px) { .th-bar { height: 34px; } }
 .th-bar-track {
     flex: 1;
     height: 6px;
