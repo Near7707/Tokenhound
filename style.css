@@ -1,0 +1,260 @@
+/* Tokenhound — follows the SillyTavern theme colors. */
+
+.th-window {
+    --th-fg: var(--SmartThemeBodyColor, #dcdcd2);
+    --th-muted: color-mix(in srgb, var(--th-fg) 72%, transparent);
+    --th-border: var(--SmartThemeBorderColor, rgba(127, 127, 127, 0.35));
+    --th-bg: var(--SmartThemeBlurTintColor, rgba(23, 23, 25, 0.96));
+    --th-card: color-mix(in srgb, var(--th-fg) 6%, transparent);
+    position: fixed;
+    top: 64px;
+    right: 16px;
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    height: min(78vh, 720px);
+    z-index: 5000;
+    display: flex;
+    flex-direction: column;
+    color: var(--th-fg);
+    background-color: var(--th-bg);
+    backdrop-filter: blur(var(--SmartThemeBlurStrength, 8px));
+    -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength, 8px));
+    border: 1px solid var(--th-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+    line-height: 1.45;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.th-window *, .th-bar * { box-sizing: border-box; }
+
+.th-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 8px 8px 12px;
+    border-bottom: 1px solid var(--th-border);
+    flex: none;
+}
+
+.th-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.th-logo { display: flex; align-items: center; flex: none; }
+
+.th-icon {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--th-fg);
+    border: 1px solid var(--th-border);
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+.th-icon[hidden] { display: none; }
+
+.th-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+}
+
+.th-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.th-muted { color: var(--th-muted); }
+.th-small { font-size: 12.5px; }
+.th-pad { padding: 16px 4px; }
+
+.th-meta { font-size: 13px; color: var(--th-muted); margin-bottom: 4px; }
+.th-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, #EF9F27 22%, transparent);
+    color: var(--th-fg);
+    margin-bottom: 4px;
+}
+
+.th-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.th-big { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+
+.th-stack {
+    display: flex;
+    height: 14px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 6px 0 4px;
+    background: color-mix(in srgb, var(--th-fg) 12%, transparent);
+}
+.th-stack > span, .th-mini > span { display: block; height: 100%; flex: none; }
+.th-seg-reply {
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--th-fg) 30%, transparent) 0 3px, transparent 3px 6px);
+}
+
+.th-warn {
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+.th-warn.th-stage3 { background: color-mix(in srgb, #EF9F27 22%, transparent); }
+.th-warn.th-stage4 { background: color-mix(in srgb, #E24B4A 24%, transparent); }
+.th-warntext { color: color-mix(in srgb, #EF9F27 70%, var(--th-fg)); }
+
+.th-rows { margin-top: 8px; }
+.th-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 4px 0;
+    border-top: 1px solid var(--th-border);
+}
+.th-click { cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+.th-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.th-name { flex: 1; }
+.th-chev { font-size: 11px; opacity: 0.8; margin-left: 2px; }
+.th-num { font-variant-numeric: tabular-nums; flex: none; text-align: right; }
+.th-pct { width: 40px; flex: none; text-align: right; font-size: 12.5px; color: var(--th-muted); }
+.th-delta { width: 52px; flex: none; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--th-muted); }
+.th-up { color: color-mix(in srgb, #EF9F27 75%, var(--th-fg)); }
+.th-down { color: color-mix(in srgb, #1D9E75 75%, var(--th-fg)); }
+
+.th-sub { padding: 0 0 6px 18px; font-size: 13px; }
+.th-subrow { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+
+.th-sec { margin: 14px 0 6px; font-size: 13px; font-weight: 600; color: var(--th-muted); }
+.th-card {
+    background: var(--th-card);
+    border: 1px solid var(--th-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+}
+.th-card > * + * { margin-top: 3px; }
+.th-inline { display: flex; gap: 16px; flex-wrap: wrap; }
+.th-kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; }
+
+.th-spark { width: 100%; height: 46px; display: block; }
+
+.th-btns { display: flex; gap: 6px; margin-top: 14px; }
+.th-btn {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    padding: 0 8px;
+    font-size: 14px;
+    color: var(--th-fg);
+    background: var(--th-card);
+    border: 1px solid var(--th-border);
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+.th-btn[aria-busy="true"] { opacity: 0.75; }
+
+.th-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 24px 8px 8px; }
+.th-empty-title { font-size: 16px; font-weight: 600; }
+
+.th-log { display: flex; flex-direction: column; }
+.th-logrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--th-border); }
+.th-logmain { flex: 1; min-width: 0; }
+.th-mini { display: flex; width: 72px; height: 8px; border-radius: 3px; overflow: hidden; flex: none; background: color-mix(in srgb, var(--th-fg) 12%, transparent); }
+
+.th-settings { display: flex; flex-direction: column; gap: 8px; }
+.th-check { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
+.th-check input { width: 18px; height: 18px; flex: none; margin: 0; }
+.th-hint { margin-top: -6px; padding-left: 28px; }
+.th-field { display: flex; flex-direction: column; gap: 4px; }
+.th-select {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 36px;
+    width: 100%;
+    padding: 0 34px 0 10px;
+    font-size: 16px;
+    color: var(--th-fg);
+    background-color: var(--th-card);
+    background-image: linear-gradient(45deg, transparent 50%, var(--th-fg) 50%), linear-gradient(135deg, var(--th-fg) 50%, transparent 50%);
+    background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    border: 1px solid var(--th-border);
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.th-select option { color: initial; }
+
+.th-hound { image-rendering: pixelated; flex: none; display: block; }
+
+/* Mini bar above the input */
+.th-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 26px;
+    padding: 0 10px;
+    margin: 0 0 2px;
+    color: var(--SmartThemeBodyColor, inherit);
+    font-size: 12px;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+.th-bar-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--SmartThemeBodyColor, #888) 18%, transparent);
+}
+.th-bar-track > span { display: block; height: 100%; }
+.th-bar-text { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.9; }
+
+/* Wand menu */
+.th-menu-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.4em; }
+
+/* Extensions settings panel: keep SillyTavern's own sizes */
+.th-panel .inline-drawer-content { display: flex; flex-direction: column; gap: 4px; }
+.th-p-hint { opacity: 0.8; }
+.th-p-stages { display: flex; gap: 6px; }
+.th-p-stages input { flex: 1; min-width: 0; }
+.th-p-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.th-p-row .menu_button { white-space: nowrap; }
+
+@media (max-width: 700px) {
+    .th-window {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        max-width: none;
+    }
+}
+
+/* Keep the black outline visible on dark themes */
+.th-hound { filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.55)); }
