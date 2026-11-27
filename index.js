@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.17';
+const VERSION = '0.5.18';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1027,7 +1027,7 @@ function addSide(chatId, rec) {
     const kept = list.slice(-SIDE_MAX);
     if (chatId === state.chatId) state.side = kept;
     storeSide(chatId, kept);
-    if (chatId === state.chatId) { schedulePush(); if (state.open && state.view === 'side') render(); }
+    if (chatId === state.chatId) { schedulePush(); if (state.open && state.view === 'main') render(); }
 }
 
 function installFetchWatch() {
