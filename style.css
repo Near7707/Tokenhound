@@ -353,8 +353,17 @@
     user-select: none;
     touch-action: manipulation;
 }
-.th-walk-dog { display: block; }
-.th-walker.th-flip .th-walk-dog { transform: scaleX(-1); }
+.th-rig { display: block; position: relative; }
+.th-walker.th-flip .th-rig { transform: scaleX(-1); }
+.th-walk-dog { display: block; position: absolute; left: 0; bottom: 0; }
+.th-walk-dog > svg { display: block; }
+/* Donut the hound rolls (nose) or rides (ride); the number never turns or mirrors */
+.th-toy { position: absolute; display: block; }
+.th-toy-spin { display: block; transition: transform 0.14s linear; }
+.th-toy .th-ring-num { font-size: 9px; font-variant-numeric: tabular-nums; }
+.th-toy-ride .th-ring-num { font-size: 10px; }
+.th-walker.th-flip .th-toy .th-ring-num { transform: scaleX(-1); }
+@media (prefers-reduced-motion: reduce) { .th-toy-spin { transition: none; } }
 .th-walk-bubble {
     position: absolute;
     bottom: calc(100% + 2px);
@@ -389,7 +398,7 @@
 }
 .th-walk-bubble.th-show,
 .th-walker:hover .th-walk-bubble,
-.th-walker:focus-visible .th-walk-bubble { opacity: 1; }
+.th-walker:focus-visible .th-walk-bubble { opacity: 1; pointer-events: auto; }
 
 /* Quick card: tap the button or the hound */
 .th-card-pop {

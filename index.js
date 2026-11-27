@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -14,6 +14,7 @@ const POS_KEY = 'tokenhound:btnpos';
 const DISPLAYS = ['button', 'walk', 'menu'];
 const FAB_STYLES = ['line', 'ring', 'plain'];
 const TAP_OPENS = ['card', 'window'];
+const WALK_TOYS = ['off', 'nose', 'ride'];
 const CARD_MIN_CHANGE = 50; // smaller changes are left out of the quick card
 const SERVER_PREFIX = 'tokenhound-';
 const SERVER_INDEX = 'tokenhound-index.json';
@@ -26,6 +27,8 @@ const DEFAULTS = Object.freeze({
     barHound: true,
     fabStyle: 'line',
     tapOpens: 'card',
+    barTap: 'window',
+    walkToy: 'off',
     lang: 'auto',
     readUsage: true,
     serverSync: true,
@@ -161,6 +164,8 @@ function loadSettings() {
     s.barHound = s.barHound !== false;
     if (!FAB_STYLES.includes(s.fabStyle)) s.fabStyle = DEFAULTS.fabStyle;
     if (!TAP_OPENS.includes(s.tapOpens)) s.tapOpens = DEFAULTS.tapOpens;
+    if (!TAP_OPENS.includes(s.barTap)) s.barTap = DEFAULTS.barTap;
+    if (!WALK_TOYS.includes(s.walkToy)) s.walkToy = DEFAULTS.walkToy;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -1203,6 +1208,10 @@ function tapOptions() {
     return TAP_OPENS.map(v => [v, t('tap_' + v)]);
 }
 
+function toyOptions() {
+    return WALK_TOYS.map(v => [v, t('toy_' + v)]);
+}
+
 function langOptions() {
     return [['auto', t('lang_auto')], ['en', 'English'], ['ko', '한국어']];
 }
@@ -1214,6 +1223,8 @@ function renderQuickSettings() {
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
         + check('th-q-bar', settings.barOn, t('set_bar'))
         + (settings.barOn ? check('th-q-barhound', settings.barHound, t('set_bar_hound')) : '')
+        + (settings.barOn ? `<label class="th-field"><span>${esc(t('set_bar_tap'))}</span>${selectHtml('th-q-bartap', settings.barTap, tapOptions())}</label>` : '')
+        + (settings.display === 'walk' ? `<label class="th-field"><span>${esc(t('set_walk_toy'))}</span>${selectHtml('th-q-toy', settings.walkToy, toyOptions())}</label>` : '')
         + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
         + (settings.display !== 'menu' ? `<label class="th-field"><span>${esc(t('set_tap'))}</span>${selectHtml('th-q-tap', settings.tapOpens, tapOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
@@ -1342,6 +1353,8 @@ function onWindowChange(e) {
         case 'th-q-barhound': settings.barHound = el.checked; break;
         case 'th-q-fabstyle': settings.fabStyle = el.value; break;
         case 'th-q-tap': settings.tapOpens = el.value; break;
+        case 'th-q-bartap': settings.barTap = el.value; break;
+        case 'th-q-toy': settings.walkToy = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-lang': settings.lang = el.value; break;
@@ -1364,7 +1377,7 @@ function renderBar() {
         bar.className = 'th-bar';
         bar.setAttribute('role', 'button');
         bar.tabIndex = 0;
-        bar.addEventListener('click', () => (state.open ? closeWindow() : openWindow()));
+        bar.addEventListener('click', () => onHoundTap(bar, settings.barTap));
         bar.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bar.click(); } });
         anchor.parentNode.insertBefore(bar, anchor);
     }
@@ -1485,9 +1498,9 @@ function renderFab() {
 
 const card = { anchor: null };
 
-function onHoundTap(anchor) {
+function onHoundTap(anchor, opens = settings.tapOpens) {
     if (state.open) { closeWindow(); return; }
-    if (settings.tapOpens === 'window') { openWindow(); return; }
+    if (opens === 'window') { closeCard(); openWindow(); return; }
     if (card.anchor === anchor && document.getElementById('th-card')) { closeCard(); return; }
     openCard(anchor);
 }
@@ -1598,7 +1611,7 @@ function placeCard(el, anchor) {
     const w = el.offsetWidth;
     const h = el.offsetHeight;
     // Open toward the middle of the screen, above the hound when there's room.
-    let left = (r.left + r.width / 2 > vw / 2) ? r.right - w : r.left;
+    let left = r.width > w ? r.left + (r.width - w) / 2 : (r.left + r.width / 2 > vw / 2) ? r.right - w : r.left;
     left = Math.min(Math.max(8, left), Math.max(8, vw - w - 8));
     let top = r.top - h - 8;
     if (top < 8) top = Math.min(r.bottom + 8, vh - h - 8);
@@ -1618,8 +1631,24 @@ function renderCard() {
 
 // ---------- wandering hound (walks along the top edge of the input) ----------
 
-const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null };
+const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0 };
 const WALK_SCALE = 1.25;
+const DOG_W = 28 * WALK_SCALE;
+const DOG_H = 16 * WALK_SCALE;
+// Donut the hound plays with: size, ring width, and where it sits next to the hound.
+const TOYS = {
+    nose: { size: 20, w: 3, left: 25 * WALK_SCALE, bottom: 0, dogBottom: 0 }, // rolled ahead by the nose
+    ride: { size: 28, w: 4, left: 0, bottom: 0, dogBottom: 28 - WALK_SCALE }, // the hound balances on top
+};
+
+function walkToy() {
+    return settings.display === 'walk' ? TOYS[settings.walkToy] || null : null;
+}
+
+function rigSize(toy) {
+    if (!toy) return { w: DOG_W, h: DOG_H };
+    return { w: Math.max(DOG_W, toy.left + toy.size), h: Math.max(DOG_H + toy.dogBottom, toy.size) };
+}
 
 function reducedMotion() {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
@@ -1653,24 +1682,40 @@ function walkStep() {
             frame = stage === 2 ? 'sniff' : 'stand';
         } else {
             if (stage === 2 && walk.tick % 45 === 0) walk.pause = 12;
-            const max = Math.max(8, lane.clientWidth - 28 * WALK_SCALE - 8);
+            const max = Math.max(8, lane.clientWidth - rigSize(walkToy()).w - 8);
             walk.x += walk.dir * speed;
+            walk.roll += speed;
             if (walk.x >= max) { walk.x = max; walk.dir = -1; }
             if (walk.x <= 8) { walk.x = 8; walk.dir = 1; }
             const step = walk.tick % 4 < 2;
             frame = step ? 'walk' : (stage === 3 ? 'pant' : 'stand');
         }
     }
-    const showBubble = Date.now() < walk.bubbleUntil;
-    const key = `${frame}:${walk.dir}:${showBubble}:${pct}:${rec?.est ? 1 : 0}`;
-    dog.style.left = `${Math.round(walk.x)}px`;
-    if (key === walk.key) return;
-    walk.key = key;
-    const sprite = frame === 'walk' ? houndSvg(1, WALK_SCALE, true)
-        : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, WALK_SCALE);
-    dog.classList.toggle('th-flip', walk.dir < 0);
+    const toy = walkToy();
+    const showBubble = !toy && Date.now() < walk.bubbleUntil;
     const label = rec ? `${pct}${rec.est ? '~' : ''}` : '—';
-    dog.innerHTML = `<span class="th-walk-dog">${sprite}</span><span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${donutSvg(rec)}<span class="th-ring-num${pctClass(stage)}">${label}</span></span>`;
+    const key = `${frame}:${walk.dir}:${showBubble}:${label}:${settings.walkToy}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
+    dog.style.left = `${Math.round(walk.x)}px`;
+    if (key !== walk.key) {
+        walk.key = key;
+        const sprite = frame === 'walk' ? houndSvg(1, WALK_SCALE, true)
+            : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, WALK_SCALE);
+        dog.classList.toggle('th-flip', walk.dir < 0);
+        const num = `<span class="th-ring-num${pctClass(stage)}">${label}</span>`;
+        if (toy) {
+            const { w, h } = rigSize(toy);
+            dog.innerHTML = `<span class="th-rig" style="width:${w}px;height:${h}px">`
+                + `<span class="th-walk-dog" style="bottom:${toy.dogBottom}px">${sprite}</span>`
+                + `<span class="th-toy th-toy-${settings.walkToy}" style="left:${toy.left}px;bottom:${toy.bottom}px;width:${toy.size}px;height:${toy.size}px">`
+                + `<span class="th-toy-spin">${donutSvg(rec, toy.size, toy.w)}</span>${num}</span></span>`;
+        } else {
+            dog.innerHTML = `<span class="th-rig" style="width:${DOG_W}px;height:${DOG_H}px"><span class="th-walk-dog">${sprite}</span></span>`
+                + `<span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
+        }
+    }
+    // The donut turns as far as the hound has walked (mirrored when walking back).
+    const spin = toy && dog.querySelector('.th-toy-spin');
+    if (spin) spin.style.transform = `rotate(${Math.round((walk.roll / (toy.size / 2)) * 180 / Math.PI)}deg)`;
 }
 
 function renderWalker() {
@@ -1739,6 +1784,10 @@ ${chk('th-p-enabled', t('set_enabled'))}
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 ${chk('th-p-bar', t('set_bar'))}
 ${chk('th-p-barhound', t('set_bar_hound'))}
+<label for="th-p-bartap">${esc(t('set_bar_tap'))}</label>
+<select id="th-p-bartap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+<label for="th-p-toy">${esc(t('set_walk_toy'))}</label>
+<select id="th-p-toy" class="text_pole">${toyOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-fabstyle">${esc(t('set_fab_style'))}</label>
 <select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-tap">${esc(t('set_tap'))}</label>
@@ -1771,6 +1820,8 @@ function syncPanel() {
     $('th-p-barhound').checked = settings.barHound;
     $('th-p-fabstyle').value = settings.fabStyle;
     $('th-p-tap').value = settings.tapOpens;
+    $('th-p-bartap').value = settings.barTap;
+    $('th-p-toy').value = settings.walkToy;
     $('th-p-sync').checked = settings.serverSync;
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
@@ -1800,6 +1851,8 @@ function buildPanel() {
             case 'th-p-barhound': settings.barHound = el.checked; break;
             case 'th-p-fabstyle': settings.fabStyle = el.value; break;
             case 'th-p-tap': settings.tapOpens = el.value; closeCard(); break;
+            case 'th-p-bartap': settings.barTap = el.value; closeCard(); break;
+            case 'th-p-toy': settings.walkToy = el.value; break;
             case 'th-p-sync':
                 settings.serverSync = el.checked;
                 syncPanel();
