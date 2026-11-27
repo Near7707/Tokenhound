@@ -210,20 +210,35 @@
 .th-log { display: flex; flex-direction: column; }
 .th-logitem { border-top: 1px solid var(--th-border); }
 .th-logrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
-.th-logtitle { font-size: 15px; font-weight: 600; }
-.th-logrow .th-chev { flex: none; font-size: 11px; color: var(--th-muted); }
-/* An opened turn: tinted title row, details indented behind a line. */
-.th-logitem.th-open > .th-logrow {
-    margin: 0 -6px;
-    padding: 8px 6px;
-    border-radius: 6px;
+.th-logtop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.th-logtitle { font-size: 15px; font-weight: 600; min-width: 0; }
+.th-logtag {
+    flex: none;
+    font-size: 11px;
+    line-height: 16px;
+    padding: 0 6px;
+    border-radius: 5px;
+    color: var(--th-muted);
     background: color-mix(in srgb, var(--th-fg) 9%, transparent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
-.th-logdetail {
-    margin: 6px 0 10px 6px;
-    padding: 2px 0 2px 10px;
-    border-left: 2px solid color-mix(in srgb, var(--th-fg) 30%, transparent);
+.th-logrow .th-chev { flex: none; font-size: 11px; color: var(--th-muted); }
+/* An opened turn is one card: darker title row, lighter details. */
+.th-logitem.th-open {
+    margin: 4px -4px;
+    border: 1px solid var(--th-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--th-fg) 5%, transparent);
 }
+.th-logitem.th-open + .th-logitem { border-top: 0; }
+.th-logitem.th-open > .th-logrow {
+    padding: 8px;
+    background: color-mix(in srgb, var(--th-fg) 10%, transparent);
+}
+.th-logitem.th-open .th-logtag { background: color-mix(in srgb, var(--th-bg) 70%, transparent); }
+.th-logdetail { padding: 6px 10px 8px 14px; }
 .th-logdetail .th-stack { margin: 0 0 4px; }
 .th-logdetail .th-rows { margin-top: 6px; }
 .th-logmain { flex: 1; min-width: 0; }

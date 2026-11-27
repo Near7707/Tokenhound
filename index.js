@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.12';
+const VERSION = '0.5.13';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -783,6 +783,9 @@ async function attachReply(rec, messageId) {
     try {
         const m = ctx().chat?.[messageId];
         if (!m || m.is_user) return;
+        // Message number as SillyTavern shows it (#N), plus which swipe it was.
+        if (Number.isInteger(Number(messageId))) rec.mid = Number(messageId);
+        if (Array.isArray(m.swipes) && m.swipes.length > 1 && Number.isInteger(m.swipe_id)) rec.sw = m.swipe_id + 1;
         rec.out = { text: await count(m.mes), reason: await count(m.extra?.reasoning || '') };
     } catch { /* ignore */ }
     rec.awaitingReply = false;
@@ -1250,7 +1253,7 @@ function renderLog() {
         const open = state.logOpen.has(r.t);
         const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         let html = `<div class="th-logitem${open ? ' th-open' : ''}">`
-            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), isMobile() ? 1 : 2)}<div class="th-logmain"><div class="th-ellipsis th-logtitle">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
+            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-logtop"><span class="th-ellipsis th-logtitle">${esc(t('log_item', { total: fmt(r.total), pct }))}</span>${Number.isInteger(r.mid) ? `<span class="th-logtag">${esc(r.sw ? t('log_mid_swipe', { n: r.mid, s: r.sw }) : t('log_mid', { n: r.mid }))}</span>` : ''}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
             + `<div class="th-mini">${barSegments(r)}</div><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i></div>`;
         if (open) html += logDetailHtml(r, list[i - 1] || null);
         return html + '</div>';
