@@ -41,7 +41,9 @@ Settings are in **Extensions › Tokenhound**. The ⚙ button in the window has 
 
 - Read-only. Tokenhound doesn't add anything to the prompt, and it doesn't change chats, cards, or other extensions' settings.
 - To read the API usage, it reads a copy of the reply your API sends back to SillyTavern. Nothing is sent anywhere. You can turn this off in the settings.
-- The turn log is saved in this browser only (up to 100 chats). It stores numbers, entry names, and the model name, not your messages.
+- The turn log stores numbers, entry names, and the model name, not your messages. It keeps up to 100 chats.
+- By default the log is also saved as small files in your SillyTavern user files (the same folder as Data Bank uploads), so your PC and phone see the same log. Chat files are not touched. Turn off "Share the turn log between devices" to keep it in this browser only.
+- SillyTavern's Data Maid may list these files (`tokenhound-….json`) as unused. Deleting them only removes the log.
 
 ## Group chats
 
@@ -90,7 +92,9 @@ Group chats are supported. The card row shows the name of the character who is s
 
 - 읽기만 해요. 프롬프트에 아무것도 넣지 않고, 채팅, 캐릭터 카드, 다른 확장 설정도 바꾸지 않아요.
 - API 사용량을 보려고, API가 실리태번에 돌려준 답의 복사본을 읽어요. 아무 데도 보내지 않아요. 설정에서 끌 수 있어요.
-- 턴 기록은 이 브라우저에만 저장돼요(채팅방 100개까지). 숫자, 항목 이름, 모델 이름만 저장하고 메시지 내용은 저장하지 않아요.
+- 턴 기록에는 숫자, 항목 이름, 모델 이름만 저장하고 메시지 내용은 저장하지 않아요. 채팅방 100개까지 남아요.
+- 기본으로 실리태번 사용자 파일 폴더(데이터 뱅크 파일이 들어가는 곳)에도 작은 파일로 저장해요. 그래서 PC와 폰에서 같은 기록을 봐요. 채팅 파일은 건드리지 않아요. "턴 기록을 기기끼리 같이 보기"를 끄면 이 브라우저에만 저장해요.
+- 실리태번 데이터 정리 도구(Data Maid)에 이 파일들(`tokenhound-….json`)이 "안 쓰는 파일"로 보일 수 있어요. 지워도 기록만 사라져요.
 
 ### 그룹 채팅
 

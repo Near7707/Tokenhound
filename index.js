@@ -12,12 +12,16 @@ const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
 const POS_KEY = 'tokenhound:btnpos';
 const DISPLAYS = ['button', 'bar', 'walk', 'menu'];
+const SERVER_PREFIX = 'tokenhound-';
+const SERVER_INDEX = 'tokenhound-index.json';
+const SERVER_FORMAT = 1;
 
 const DEFAULTS = Object.freeze({
     enabled: true,
     display: 'button',
     lang: 'auto',
     readUsage: true,
+    serverSync: true,
     showEstimate: true,
     logSize: 50,
     stages: [50, 85, 95],
@@ -161,7 +165,7 @@ function loadLog(chatId) {
         if (!raw) return [];
         const data = JSON.parse(raw);
         if (data?.v !== LOG_FORMAT || !Array.isArray(data.turns)) return [];
-        return data.turns;
+        return data.turns.filter(r => r && Number.isFinite(r.t));
     } catch { return []; }
 }
 
@@ -185,9 +189,183 @@ function saveLog() {
         console.warn('[Tokenhound] save failed', e);
         if (!failedSaveWarned) { failedSaveWarned = true; toast('warning', t('save_failed')); }
     }
+    schedulePush();
+}
+
+// ---------- turn log on the SillyTavern server (shared between devices) ----------
+// Small JSON files in the user's "files" folder (the same place as Data Bank uploads).
+// Only numbers and names are stored, never message text. Chat files are not touched.
+
+let syncWarned = false;
+let pushTimer = null;
+let pushChain = Promise.resolve();
+let lastPull = { chatId: null, at: 0 };
+
+function fileNameFor(chatId) {
+    // SillyTavern only allows letters, numbers, '-' and '_' in names, so hash the chat ID.
+    const bytes = new TextEncoder().encode(String(chatId));
+    let a = 0x811c9dc5;
+    let b = 0x9747b28c;
+    for (const x of bytes) {
+        a = Math.imul(a ^ x, 16777619) >>> 0;
+        b = Math.imul(b ^ x, 2246822519) >>> 0;
+    }
+    return `${SERVER_PREFIX}${a.toString(16).padStart(8, '0')}${b.toString(16).padStart(8, '0')}.json`;
+}
+
+function requestHeaders() {
+    try { return ctx().getRequestHeaders?.() || { 'Content-Type': 'application/json' }; } catch { return { 'Content-Type': 'application/json' }; }
+}
+
+function toBase64(text) {
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+}
+
+async function serverRead(name) {
+    const res = await fetch(`/user/files/${name}?t=${Date.now()}`, { method: 'GET', cache: 'no-store', headers: requestHeaders() });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`read ${res.status}`);
+    try { return await res.json(); } catch { return null; }
+}
+
+async function serverWrite(name, obj) {
+    const res = await fetch('/api/files/upload', {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ name, data: toBase64(JSON.stringify(obj)) }),
+    });
+    if (!res.ok) throw new Error(`write ${res.status}`);
+}
+
+async function serverDelete(name) {
+    const res = await fetch('/api/files/delete', {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify({ path: `user/files/${name}` }),
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`delete ${res.status}`);
+}
+
+function syncFailed(e) {
+    console.warn('[Tokenhound] server sync failed', e);
+    if (!syncWarned) { syncWarned = true; toast('warning', t('sync_failed')); }
+}
+
+async function readIndex() {
+    const idx = await serverRead(SERVER_INDEX);
+    const files = Array.isArray(idx?.files) ? idx.files.filter(f => typeof f === 'string' && f.startsWith(SERVER_PREFIX)) : [];
+    return { v: SERVER_FORMAT, files, clearedAllAt: Number(idx?.clearedAllAt) || 0 };
+}
+
+/** Joins two turn lists by time. This device's copy wins for the same turn. */
+function mergeTurns(local, remote, cutoff) {
+    const byT = new Map();
+    for (const r of remote || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
+    for (const r of local || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
+    return [...byT.values()].filter(r => r.t > cutoff).sort((x, y) => x.t - y.t).slice(-settings.logSize);
+}
+
+const sameTurns = (x, y) => x.length === y.length && x.every((r, i) => r.t === y[i].t);
+
+function adoptMerged(chatId, merged) {
+    if (state.chatId !== chatId) return;
+    const before = state.log;
+    state.log = merged;
+    const last = merged[merged.length - 1] || null;
+    if (!state.latest || !last || last.t !== state.latest.t) state.latest = last;
+    try { localStorage.setItem(LOG_PREFIX + chatId, JSON.stringify({ v: LOG_FORMAT, turns: merged })); } catch { /* ignore */ }
+    if (!sameTurns(before, merged)) render();
+}
+
+/** Loads the server copy of this chat's log and merges it in. */
+async function pullLog(force = false) {
+    const chatId = state.chatId;
+    if (!settings.serverSync || !chatId) return;
+    if (!force && lastPull.chatId === chatId && Date.now() - lastPull.at < 3000) return;
+    lastPull = { chatId, at: Date.now() };
+    try {
+        const name = fileNameFor(chatId);
+        // Only ask for files the index knows about, so the browser console stays free of 404s.
+        const index = await readIndex();
+        const file = index.files.includes(name) ? await serverRead(name) : null;
+        const cutoff = Math.max(index.clearedAllAt, Number(file?.clearedAt) || 0);
+        const remote = file?.v === SERVER_FORMAT && Array.isArray(file.turns) ? file.turns : [];
+        const merged = mergeTurns(state.chatId === chatId ? state.log : [], remote, cutoff);
+        adoptMerged(chatId, merged);
+        if (!sameTurns(merged, mergeTurns([], remote, cutoff))) schedulePush();
+    } catch (e) {
+        syncFailed(e);
+    }
+}
+
+function schedulePush() {
+    if (!settings?.serverSync || !state.chatId) return;
+    clearTimeout(pushTimer);
+    const chatId = state.chatId;
+    pushTimer = setTimeout(() => { pushChain = pushChain.then(() => pushLog(chatId)).catch(() => {}); }, 2000);
+}
+
+/** Saves this chat's log to the server, merging with what is there first. */
+async function pushLog(chatId) {
+    if (!settings.serverSync || !chatId) return;
+    try {
+        const name = fileNameFor(chatId);
+        // Only ask for files the index knows about, so the browser console stays free of 404s.
+        const index = await readIndex();
+        const file = index.files.includes(name) ? await serverRead(name) : null;
+        const fileCut = Number(file?.clearedAt) || 0;
+        const cutoff = Math.max(index.clearedAllAt, fileCut);
+        const remote = file?.v === SERVER_FORMAT && Array.isArray(file.turns) ? file.turns : [];
+        const local = state.chatId === chatId ? state.log : loadLog(chatId);
+        const merged = mergeTurns(local, remote, cutoff);
+        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: fileCut, turns: merged });
+        adoptMerged(chatId, merged);
+        if (!index.files.includes(name)) {
+            index.files.push(name);
+            while (index.files.length > MAX_CHATS) {
+                const old = index.files.shift();
+                try { await serverDelete(old); } catch { /* ignore */ }
+            }
+            await serverWrite(SERVER_INDEX, index);
+        }
+    } catch (e) {
+        syncFailed(e);
+    }
+}
+
+async function clearServerChat(chatId) {
+    if (!settings.serverSync || !chatId) return;
+    // Keep an empty file with a "cleared" time, so other devices drop their older copies too.
+    try {
+        const name = fileNameFor(chatId);
+        await serverWrite(name, { v: SERVER_FORMAT, clearedAt: Date.now(), turns: [] });
+        const index = await readIndex();
+        if (!index.files.includes(name)) { index.files.push(name); await serverWrite(SERVER_INDEX, index); }
+    } catch (e) {
+        syncFailed(e);
+    }
+}
+
+async function clearServerAll() {
+    if (!settings.serverSync) return;
+    try {
+        const index = await readIndex();
+        for (const name of index.files) {
+            try { await serverDelete(name); } catch { /* ignore */ }
+        }
+        await serverWrite(SERVER_INDEX, { v: SERVER_FORMAT, files: [], clearedAllAt: Date.now() });
+    } catch (e) {
+        syncFailed(e);
+    }
 }
 
 function clearChatLog() {
+    clearTimeout(pushTimer);
+    const chatId = state.chatId;
+    pushChain = pushChain.then(() => clearServerChat(chatId)).catch(() => {});
     if (state.chatId) {
         try { localStorage.removeItem(LOG_PREFIX + state.chatId); } catch { /* ignore */ }
     }
@@ -198,6 +376,8 @@ function clearChatLog() {
 }
 
 function clearAllLogs() {
+    clearTimeout(pushTimer);
+    pushChain = pushChain.then(() => clearServerAll()).catch(() => {});
     try {
         const keys = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -690,6 +870,7 @@ function onChatChanged() {
     state.pendingUsage = null;
     state.lastWi = [];
     render();
+    pullLog(true);
 }
 
 function bindEvents() {
@@ -963,6 +1144,7 @@ function openWindow() {
     ensureWindow();
     render();
     sizeWindow();
+    pullLog();
 }
 
 function closeWindow() {
@@ -1286,7 +1468,9 @@ ${chk('th-p-estimate', t('set_estimate'))}
 <div class="th-p-stages"><input id="th-p-s1" class="text_pole" type="number" min="1" max="100" inputmode="numeric"><input id="th-p-s2" class="text_pole" type="number" min="1" max="100" inputmode="numeric"><input id="th-p-s3" class="text_pole" type="number" min="1" max="100" inputmode="numeric"></div>
 <small class="th-p-hint">${esc(t('set_stage_hint'))}</small>
 <div class="th-p-row"><div id="th-p-clear" class="menu_button">${esc(t('set_clear_chat'))}</div><div id="th-p-clearall" class="menu_button">${esc(t('set_clear_all'))}</div></div>
-<small class="th-p-hint">${esc(t('set_storage_note'))} · ${esc(t('set_version', { v: VERSION }))}</small>
+${chk('th-p-sync', t('set_sync'))}
+<small class="th-p-hint">${esc(t('set_sync_hint'))}</small>
+<small class="th-p-hint"><span id="th-p-storage"></span> · ${esc(t('set_version', { v: VERSION }))}</small>
 </div></div></div>`;
 }
 
@@ -1295,6 +1479,8 @@ function syncPanel() {
     if (!$('th-p-enabled')) return;
     $('th-p-enabled').checked = settings.enabled;
     $('th-p-display').value = settings.display;
+    $('th-p-sync').checked = settings.serverSync;
+    $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
     $('th-p-estimate').checked = settings.showEstimate;
     $('th-p-lang').value = settings.lang;
@@ -1318,6 +1504,11 @@ function buildPanel() {
         switch (el.id) {
             case 'th-p-enabled': settings.enabled = el.checked; break;
             case 'th-p-display': settings.display = el.value; break;
+            case 'th-p-sync':
+                settings.serverSync = el.checked;
+                syncPanel();
+                if (el.checked) { syncWarned = false; pullLog(true).then(() => schedulePush()); }
+                break;
             case 'th-p-usage': settings.readUsage = el.checked; break;
             case 'th-p-estimate': settings.showEstimate = el.checked; break;
             case 'th-p-lang': settings.lang = el.value; saveSettings(); buildPanel(); rebuildMenu(); render(); return;
@@ -1394,6 +1585,7 @@ async function init() {
         state.log = loadLog(state.chatId);
         state.latest = state.log[state.log.length - 1] || null;
         render();
+        pullLog(true);
     } catch (e) {
         console.error('[Tokenhound] failed to start', e);
     }
