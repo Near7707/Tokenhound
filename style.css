@@ -6,6 +6,11 @@
     --th-border: var(--SmartThemeBorderColor, rgba(127, 127, 127, 0.35));
     --th-bg: var(--SmartThemeBlurTintColor, rgba(23, 23, 25, 0.96));
     --th-card: color-mix(in srgb, var(--th-fg) 6%, transparent);
+    /* Pick boxes get their own solid fill so the text never lands on a white box. */
+    --th-field: color-mix(in srgb, var(--th-fg) 10%, var(--th-bg));
+    --th-btn: color-mix(in srgb, var(--th-fg) 14%, transparent);
+    --th-btn-border: color-mix(in srgb, var(--th-fg) 32%, transparent);
+    --th-btn-press: color-mix(in srgb, var(--th-fg) 24%, transparent);
     position: fixed;
     top: 64px;
     right: 16px;
@@ -175,8 +180,8 @@
     padding: 0 8px;
     font-size: 14px;
     color: var(--th-fg);
-    background: var(--th-card);
-    border: 1px solid var(--th-border);
+    background: var(--th-btn);
+    border: 1px solid var(--th-btn-border);
     border-radius: 8px;
     white-space: nowrap;
     overflow: hidden;
@@ -186,6 +191,8 @@
     -webkit-touch-callout: none;
     user-select: none;
 }
+.th-btn:active { background: var(--th-btn-press); }
+@media (hover: hover) { .th-btn:hover { background: var(--th-btn-press); } }
 .th-btn[aria-busy="true"] { opacity: 0.75; }
 
 .th-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 24px 8px 8px; }
@@ -208,8 +215,9 @@
     width: 100%;
     padding: 0 34px 0 10px;
     font-size: 14px;
-    color: var(--th-fg);
-    background-color: var(--th-card);
+    color: var(--th-fg) !important;
+    -webkit-text-fill-color: var(--th-fg);
+    background-color: var(--th-field) !important;
     background-image: linear-gradient(45deg, transparent 50%, var(--th-fg) 50%), linear-gradient(135deg, var(--th-fg) 50%, transparent 50%);
     background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
     background-size: 5px 5px, 5px 5px;
@@ -221,6 +229,11 @@
     text-overflow: ellipsis;
 }
 .th-select option { color: initial; }
+.th-window.th-light .th-select option, .th-window.th-light .th-select option:not(:checked),
+.th-window.th-dark .th-select option, .th-window.th-dark .th-select option:not(:checked) {
+    color: var(--th-fg);
+    background-color: var(--th-field);
+}
 
 .th-hound { image-rendering: pixelated; flex: none; display: block; }
 
@@ -479,6 +492,10 @@
     --th-fg: #2b2b28;
     --th-border: #d6d3c8;
     --th-bg: rgba(247, 245, 240, 0.97);
+    --th-field: #ffffff;
+    --th-btn: #e6e2d7;
+    --th-btn-border: #c4bfb1;
+    --th-btn-press: #d8d3c5;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: light;
@@ -487,7 +504,54 @@
     --th-fg: #dcdcd2;
     --th-border: #3a3a3c;
     --th-bg: rgba(28, 28, 30, 0.97);
+    --th-field: #2c2c2e;
+    --th-btn: #3a3a3c;
+    --th-btn-border: #5c5c5e;
+    --th-btn-press: #48484a;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: dark;
 }
+
+/* Resting hound: a doghouse that stays put (drag to move) */
+.th-house {
+    position: fixed;
+    z-index: 3000;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 9px 4px 4px;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.th-house.th-dragging { cursor: grabbing; opacity: 0.85; }
+.th-house-art { position: relative; display: block; }
+.th-house-art > svg { display: block; }
+/* Nameplate hung on the roof, above the door (black and white like the hound) */
+.th-house-sign {
+    position: absolute;
+    left: 0;
+    top: -6px;
+    min-width: 21px;
+    box-sizing: border-box;
+    padding: 0 2px;
+    font-size: 9px;
+    line-height: 10px;
+    font-weight: 600;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: #141414;
+    background: #FAFAF7;
+    border: 1px solid #141414;
+    border-radius: 2px;
+}
+.th-house-sign.th-pct3 { color: #B36F10; }
+.th-house-sign.th-pct4 { color: #C83A39; }
+.th-house-donut { position: relative; display: block; flex: none; width: 26px; height: 26px; }
+.th-house-donut .th-ring-num { font-size: 9px; font-variant-numeric: tabular-nums; }
+@media (hover: hover) { .th-house:hover .th-house-bubble { opacity: 1; } }
+.th-house:focus-visible .th-house-bubble { opacity: 1; }

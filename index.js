@@ -2,16 +2,18 @@
 // Read-only: it never adds anything to the prompt and never edits chats or cards.
 
 import { STRINGS } from './i18n.js';
-import { houndSvg } from './sprites.js';
+import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
 const POS_KEY = 'tokenhound:btnpos';
-const DISPLAYS = ['button', 'walk', 'menu'];
+const HOUSE_POS_KEY = 'tokenhound:housepos';
+const DISPLAYS = ['button', 'walk', 'house', 'menu'];
+const HOUSE_NUMS = ['sign', 'donut'];
 const FAB_STYLES = ['line', 'ring', 'plain'];
 const TAP_OPENS = ['card', 'window'];
 const WALK_TOYS = ['off', 'nose', 'ride'];
@@ -30,6 +32,8 @@ const DEFAULTS = Object.freeze({
     tapOpens: 'card',
     barTap: 'window',
     walkToy: 'off',
+    houseNum: 'sign',
+    mainWalk: true,
     lang: 'auto',
     theme: 'auto',
     readUsage: true,
@@ -169,6 +173,8 @@ function loadSettings() {
     if (!TAP_OPENS.includes(s.barTap)) s.barTap = DEFAULTS.barTap;
     if (!WALK_TOYS.includes(s.walkToy)) s.walkToy = DEFAULTS.walkToy;
     if (!THEMES.includes(s.theme)) s.theme = DEFAULTS.theme;
+    if (!HOUSE_NUMS.includes(s.houseNum)) s.houseNum = DEFAULTS.houseNum;
+    s.mainWalk = s.mainWalk !== false;
     delete s.showBar; // 0.1.0 setting
     settings = s;
 }
@@ -1255,6 +1261,10 @@ function toyOptions() {
     return WALK_TOYS.map(v => [v, t('toy_' + v)]);
 }
 
+function houseNumOptions() {
+    return HOUSE_NUMS.map(v => [v, t('house_num_' + v)]);
+}
+
 function themeOptions() {
     return [['auto', t('theme_auto')], ['light', t('theme_light')], ['dark', t('theme_dark')]];
 }
@@ -1268,10 +1278,12 @@ function renderQuickSettings() {
     return '<div class="th-settings">'
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
+        + (settings.display !== 'menu' ? check('th-q-mainwalk', settings.mainWalk, t('set_main_walk')) : '')
         + check('th-q-bar', settings.barOn, t('set_bar'))
         + (settings.barOn ? check('th-q-barhound', settings.barHound, t('set_bar_hound')) : '')
         + (settings.barOn ? `<label class="th-field"><span>${esc(t('set_bar_tap'))}</span>${selectHtml('th-q-bartap', settings.barTap, tapOptions())}</label>` : '')
         + (settings.display === 'walk' ? `<label class="th-field"><span>${esc(t('set_walk_toy'))}</span>${selectHtml('th-q-toy', settings.walkToy, toyOptions())}</label>` : '')
+        + (settings.display === 'house' ? `<label class="th-field"><span>${esc(t('set_house_num'))}</span>${selectHtml('th-q-housenum', settings.houseNum, houseNumOptions())}</label>` : '')
         + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
         + (settings.display !== 'menu' ? `<label class="th-field"><span>${esc(t('set_tap'))}</span>${selectHtml('th-q-tap', settings.tapOpens, tapOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
@@ -1405,6 +1417,8 @@ function onWindowChange(e) {
         case 'th-q-tap': settings.tapOpens = el.value; break;
         case 'th-q-bartap': settings.barTap = el.value; break;
         case 'th-q-toy': settings.walkToy = el.value; break;
+        case 'th-q-housenum': settings.houseNum = el.value; break;
+        case 'th-q-mainwalk': settings.mainWalk = el.checked; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
         case 'th-q-estimate': settings.showEstimate = el.checked; break;
         case 'th-q-theme': settings.theme = el.value; break;
@@ -1443,21 +1457,21 @@ function renderBar() {
 
 // ---------- small button (drag to move, position kept per device) ----------
 
-function readPos() {
+function readPos(key = POS_KEY) {
     try {
-        const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+        const p = JSON.parse(localStorage.getItem(key) || 'null');
         if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p;
     } catch { /* ignore */ }
     return null;
 }
 
-function placeFab(fab, left, top) {
+function placeFab(fab, left, top, key = fab.dataset.posKey || POS_KEY) {
     const vw = window.innerWidth;
     const vh = state.baseHeight || window.innerHeight;
     const w = fab.offsetWidth || 64;
     const h = fab.offsetHeight || 36;
     if (left === undefined) {
-        const p = readPos();
+        const p = readPos(key);
         if (p) {
             left = p.x * vw;
             top = p.y * vh;
@@ -1473,14 +1487,15 @@ function placeFab(fab, left, top) {
     fab.style.top = `${Math.round(top)}px`;
 }
 
-function bindFabDrag(fab) {
+function bindFabDrag(fab, key = POS_KEY) {
+    fab.dataset.posKey = key;
     let drag = null;
     let moved = false;
     const end = () => {
         if (drag && moved) {
             const vh = state.baseHeight || window.innerHeight;
             const pos = { x: (parseFloat(fab.style.left) || 0) / window.innerWidth, y: (parseFloat(fab.style.top) || 0) / vh };
-            try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+            try { localStorage.setItem(key, JSON.stringify(pos)); } catch { /* ignore */ }
         }
         drag = null;
         fab.classList.remove('th-dragging');
@@ -1809,15 +1824,118 @@ function renderWalker() {
     if (!walk.timer && !document.hidden) walk.timer = setInterval(walkStep, 140);
 }
 
+// ---------- resting hound (a doghouse that stays put; drag to move) ----------
+
+const HOUSE_SCALE = 1.5;
+const HOUSE_DONUT = 26;
+const house = { timer: null, frame: 'peek', since: 0, bubbleUntil: 0, lastT: null, key: '' };
+// Peeks out, lies down, then dozes off. A finished reply wakes it up again.
+const HOUSE_STEPS = [['peek', 6000], ['rest', 25000], ['sleep', 0]];
+
+function stopHouse() {
+    if (house.timer) { clearTimeout(house.timer); house.timer = null; }
+    document.getElementById('th-house')?.remove();
+    house.key = '';
+}
+
+function houseFrame() {
+    if (reducedMotion()) return 'rest';
+    let left = Date.now() - house.since;
+    for (const [frame, ms] of HOUSE_STEPS) {
+        if (!ms || left < ms) return frame;
+        left -= ms;
+    }
+    return 'sleep';
+}
+
+function scheduleHouse() {
+    if (house.timer) clearTimeout(house.timer);
+    house.timer = null;
+    if (reducedMotion()) return;
+    const now = Date.now();
+    let at = house.since;
+    let next = null;
+    for (const [, ms] of HOUSE_STEPS) {
+        if (!ms) break;
+        at += ms;
+        if (at > now) { next = at; break; }
+    }
+    if (house.bubbleUntil > now) next = next ? Math.min(next, house.bubbleUntil) : house.bubbleUntil;
+    if (next) house.timer = setTimeout(() => { house.timer = null; drawHouse(); scheduleHouse(); }, next - now + 30);
+}
+
+function drawHouse() {
+    const el = document.getElementById('th-house');
+    if (!el) return;
+    const rec = shown();
+    const pct = pctOf(rec);
+    const stage = stageOf(pct);
+    const frame = houseFrame();
+    const donut = settings.houseNum === 'donut';
+    const bubble = !donut && Date.now() < house.bubbleUntil;
+    const label = rec ? `${pct}${rec.est ? '~' : ''}` : '—';
+    const key = `${frame}:${donut}:${bubble}:${label}:${stage}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
+    if (key === house.key) return;
+    house.key = key;
+    el.title = `${t('open')} · ${t('stage_' + stage)}`;
+    el.setAttribute('aria-label', el.title);
+    const num = `<span class="th-ring-num${pctClass(stage)}">${label}</span>`;
+    let html = `<span class="th-house-art">${houseSvg(frame, HOUSE_SCALE)}`;
+    if (!donut) html += `<span class="th-house-sign${pctClass(stage)}">${rec ? `${pct}%${rec.est ? '~' : ''}` : '—'}</span>`;
+    html += '</span>';
+    if (donut) html += `<span class="th-house-donut">${donutSvg(rec, HOUSE_DONUT, 4)}${num}</span>`;
+    else html += `<span class="th-walk-bubble th-house-bubble${bubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
+    el.className = `th-house${donut ? ' th-house-withdonut' : ''}${el.classList.contains('th-dragging') ? ' th-dragging' : ''}`;
+    el.innerHTML = html;
+}
+
+function renderHouse() {
+    let el = document.getElementById('th-house');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'th-house';
+        el.className = 'th-house';
+        el.setAttribute('role', 'button');
+        el.tabIndex = 0;
+        el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHoundTap(el); } });
+        document.body.appendChild(el);
+        bindFabDrag(el, HOUSE_POS_KEY);
+        house.since = Date.now();
+        house.key = '';
+    }
+    // A finished reply wakes the hound: it peeks out and shows the number for a moment.
+    const rec = shown();
+    if (rec && !rec.awaitingReply) {
+        const recT = `${rec.t}:${rec.est ? 1 : 0}`;
+        if (house.lastT !== null && recT !== house.lastT) {
+            house.since = Date.now();
+            house.bubbleUntil = Date.now() + 4000;
+        }
+        house.lastT = recT;
+    }
+    drawHouse();
+    if (!el.style.left) placeFab(el);
+    else if (!el.classList.contains('th-dragging')) placeFab(el, parseFloat(el.style.left) || 0, parseFloat(el.style.top) || 0);
+    scheduleHouse();
+}
+
+function onMainScreen() {
+    try { return !ctx().getCurrentChatId?.(); } catch { return false; }
+}
+
 function renderDisplay() {
-    const mode = settings.enabled ? settings.display : 'menu';
-    const barOn = settings.enabled && settings.barOn;
+    // "Walk around the main screen too" off: outside a chat the hound stays out of sight.
+    const away = !settings.mainWalk && onMainScreen();
+    const mode = settings.enabled && !away ? settings.display : 'menu';
+    const barOn = settings.enabled && settings.barOn && !away;
     if (!barOn) document.getElementById('th-bar')?.remove();
     if (mode !== 'button') document.getElementById('th-fab')?.remove();
     if (mode !== 'walk') stopWalker();
+    if (mode !== 'house') stopHouse();
     if (barOn) renderBar();
     if (mode === 'button') renderFab();
     else if (mode === 'walk') renderWalker();
+    else if (mode === 'house') renderHouse();
 }
 
 function applyTheme() {
@@ -1843,12 +1961,15 @@ function panelHtml() {
 ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+${chk('th-p-mainwalk', t('set_main_walk'))}
 ${chk('th-p-bar', t('set_bar'))}
 ${chk('th-p-barhound', t('set_bar_hound'))}
 <label for="th-p-bartap">${esc(t('set_bar_tap'))}</label>
 <select id="th-p-bartap" class="text_pole">${tapOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-toy">${esc(t('set_walk_toy'))}</label>
 <select id="th-p-toy" class="text_pole">${toyOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
+<label for="th-p-housenum">${esc(t('set_house_num'))}</label>
+<select id="th-p-housenum" class="text_pole">${houseNumOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-fabstyle">${esc(t('set_fab_style'))}</label>
 <select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-tap">${esc(t('set_tap'))}</label>
@@ -1885,6 +2006,8 @@ function syncPanel() {
     $('th-p-tap').value = settings.tapOpens;
     $('th-p-bartap').value = settings.barTap;
     $('th-p-toy').value = settings.walkToy;
+    $('th-p-housenum').value = settings.houseNum;
+    $('th-p-mainwalk').checked = settings.mainWalk;
     $('th-p-sync').checked = settings.serverSync;
     $('th-p-storage').textContent = settings.serverSync ? t('set_storage_server') : t('set_storage_note');
     $('th-p-usage').checked = settings.readUsage;
@@ -1917,6 +2040,8 @@ function buildPanel() {
             case 'th-p-tap': settings.tapOpens = el.value; closeCard(); break;
             case 'th-p-bartap': settings.barTap = el.value; closeCard(); break;
             case 'th-p-toy': settings.walkToy = el.value; break;
+            case 'th-p-housenum': settings.houseNum = el.value; break;
+            case 'th-p-mainwalk': settings.mainWalk = el.checked; break;
             case 'th-p-sync':
                 settings.serverSync = el.checked;
                 syncPanel();
@@ -1942,9 +2067,11 @@ function buildPanel() {
     panel.addEventListener('click', async (e) => {
         const id = e.target?.closest?.('.menu_button')?.id;
         if (id === 'th-p-resetpos') {
-            try { localStorage.removeItem(POS_KEY); } catch { /* ignore */ }
-            const fab = document.getElementById('th-fab');
-            if (fab) placeFab(fab);
+            try { localStorage.removeItem(POS_KEY); localStorage.removeItem(HOUSE_POS_KEY); } catch { /* ignore */ }
+            for (const id of ['th-fab', 'th-house']) {
+                const el = document.getElementById(id);
+                if (el) placeFab(el);
+            }
             toast('success', t('pos_reset'));
             return;
         }
@@ -1991,8 +2118,10 @@ function onResize() {
     const typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
     if (!typing) state.baseHeight = window.innerHeight;
     if (state.open) sizeWindow();
-    const fab = document.getElementById('th-fab');
-    if (fab && !fab.classList.contains('th-dragging')) placeFab(fab);
+    for (const id of ['th-fab', 'th-house']) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('th-dragging')) placeFab(el);
+    }
 }
 
 async function init() {
@@ -2004,7 +2133,7 @@ async function init() {
         buildPanel();
         rebuildMenu();
         window.addEventListener('resize', onResize);
-        document.addEventListener('visibilitychange', () => { if (!document.hidden && settings.display === 'walk') render(); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && (settings.display === 'walk' || settings.display === 'house')) render(); });
         state.chatId = ctx().getCurrentChatId?.() || null;
         state.log = loadLog(state.chatId);
         state.latest = lastShown();

@@ -77,6 +77,65 @@ function buildWalk() {
 }
 
 
+// Resting hound: a doghouse with the hound peeking from behind it, lying in front,
+// or asleep in front (zz). Same 28 x 16 grid and colors as the hound.
+const HOUSE = {
+    peek: [
+        '......kk....................',
+        '......kk....................',
+        '....kkwwkk..................',
+        '..kkwwwwwwkk................',
+        'kkwwwwwwwwwwkkkkk...........',
+        'kkkkkkkkkkkkkkwwwk..........',
+        '.kwwwwwwwwwwkkwwwwk.........',
+        '.kwwwwwwwwwwkkwkwwwwkk......',
+        '.kwwwkkkkwwwkkwwwwwwwk......',
+        '.kwwkkkkkkwwkkwwwwkkk.......',
+        '.kwwkkkkkkwwkkkwwk..........',
+        '.kwwkkkkkkwwkkkwwk..........',
+        '.kwwkkkkkkwwkwwwwk..........',
+        '.kwwkkkkkkwwkwwwk...........',
+        '.kwwkkkkkkwwkk.kwk..........',
+        'kkkkkkkkkkkkkk..............',
+    ],
+    rest: [
+        '......kk....................',
+        '......kk....................',
+        '....kkwwkk..................',
+        '..kkwwwwwwkk................',
+        'kkwwwwwwwwwwkk..............',
+        'kkkkkkkkkkkkkk..............',
+        '.kwwwwwwwwwwk...............',
+        '.kwwwwwwwwwwk...............',
+        '.kwwwkkkkwwwk.kkkk..........',
+        '.kwwkkkkkkwwkkwwwwk.........',
+        '.kwwkkkkkkwkkwwwwwwkk.......',
+        '.kwwkkkkkkwkkkwwkwwwwk......',
+        '.kwwkkkkkkwkkkkwwwwwwkk.....',
+        '.kwwkkkkkkwkkkkwwwkkkk......',
+        '.kwwkkkkkkwwwkkkwwwwwwk.....',
+        'kkkkkkkkkkkkkkkkkkkkkk......',
+    ],
+    sleep: [
+        '......kk.............ggg....',
+        '......kk...............g....',
+        '....kkwwkk............g.....',
+        '..kkwwwwwwkk.........ggg....',
+        'kkwwwwwwwwwwkk..gggg........',
+        'kkkkkkkkkkkkkk.....g........',
+        '.kwwwwwwwwwwk.....g.........',
+        '.kwwwwwwwwwwk....gggg.......',
+        '.kwwwkkkkwwwk.kkkk..........',
+        '.kwwkkkkkkwwkkwwwwk.........',
+        '.kwwkkkkkkwkkwwwwwwkk.......',
+        '.kwwkkkkkkwkkkwkkwwwwk......',
+        '.kwwkkkkkkwkkkkwwwwwwkk.....',
+        '.kwwkkkkkkwkkkkwwwkkkk......',
+        '.kwwkkkkkkwwwkkkwwwwwwk.....',
+        'kkkkkkkkkkkkkkkkkkkkkk......',
+    ],
+};
+
 const STAGES = build();
 const WALK = buildWalk();
 const cache = new Map();
@@ -89,9 +148,21 @@ const cache = new Map();
  */
 export function houndSvg(stage = 1, scale = 1, walking = false) {
     const idx = Math.min(4, Math.max(1, stage)) - 1;
-    const key = `${walking ? 'w' : idx}:${scale}`;
+    return draw(`${walking ? 'w' : idx}:${scale}`, walking ? WALK : STAGES[idx], scale);
+}
+
+/**
+ * Returns an SVG string of the doghouse with the resting hound.
+ * @param {'peek'|'rest'|'sleep'} frame
+ * @param {number} scale pixels per grid cell
+ */
+export function houseSvg(frame = 'rest', scale = 1) {
+    const rows = HOUSE[frame] || HOUSE.rest;
+    return draw(`h${frame}:${scale}`, rows, scale);
+}
+
+function draw(key, rows, scale) {
     if (cache.has(key)) return cache.get(key);
-    const rows = walking ? WALK : STAGES[idx];
     let rects = '';
     for (let y = 0; y < H; y++) {
         const line = rows[y] || '';
