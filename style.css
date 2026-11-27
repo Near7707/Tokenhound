@@ -7,10 +7,13 @@
     --th-bg: var(--SmartThemeBlurTintColor, rgba(23, 23, 25, 0.96));
     --th-card: color-mix(in srgb, var(--th-fg) 6%, transparent);
     /* Pick boxes get their own solid fill so the text never lands on a white box. */
-    --th-field: color-mix(in srgb, var(--th-fg) 10%, var(--th-bg));
-    --th-btn: color-mix(in srgb, var(--th-fg) 14%, transparent);
-    --th-btn-border: color-mix(in srgb, var(--th-fg) 32%, transparent);
-    --th-btn-press: color-mix(in srgb, var(--th-fg) 24%, transparent);
+    --th-field: color-mix(in srgb, var(--th-fg) 12%, var(--th-bg));
+    --th-field-border: color-mix(in srgb, var(--th-fg) 38%, transparent);
+    /* Buttons wear the preset purple so they stand apart from the gray boxes. */
+    --th-btn: color-mix(in srgb, #7F77DD 30%, var(--th-bg));
+    --th-btn-border: #7F77DD;
+    --th-btn-fg: var(--th-fg);
+    --th-btn-press: color-mix(in srgb, #7F77DD 45%, var(--th-bg));
     position: fixed;
     top: 50%;
     left: 50%;
@@ -240,10 +243,23 @@
     background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50% !important;
     background-size: 5px 5px, 5px 5px !important;
     background-repeat: no-repeat !important;
-    border: 1px solid var(--th-border) !important;
+    border: 1px solid var(--th-field-border) !important;
     box-shadow: none !important;
     opacity: 1 !important;
 }
+/* Same for buttons: themes paint every button, ours keep the window colors. */
+#th-window button.th-btn {
+    color: var(--th-btn-fg) !important;
+    -webkit-text-fill-color: var(--th-btn-fg) !important;
+    background: var(--th-btn) !important;
+    border: 1px solid var(--th-btn-border) !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+}
+#th-window button.th-btn:active { background: var(--th-btn-press) !important; }
+@media (hover: hover) { #th-window button.th-btn:hover { background: var(--th-btn-press) !important; } }
+#th-window button.th-btn[aria-busy="true"] { opacity: 0.75 !important; }
 .th-window.th-light .th-select option, .th-window.th-light .th-select option:not(:checked),
 .th-window.th-dark .th-select option, .th-window.th-dark .th-select option:not(:checked) {
     color: var(--th-fg);
@@ -510,9 +526,11 @@
     --th-border: #d6d3c8;
     --th-bg: rgba(247, 245, 240, 0.97);
     --th-field: #ffffff;
-    --th-btn: #e6e2d7;
-    --th-btn-border: #c4bfb1;
-    --th-btn-press: #d8d3c5;
+    --th-field-border: #b9b4a6;
+    --th-btn: #EEEDFE;
+    --th-btn-border: #7F77DD;
+    --th-btn-fg: #3C3489;
+    --th-btn-press: #CECBF6;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: light;
@@ -521,10 +539,12 @@
     --th-fg: #dcdcd2;
     --th-border: #3a3a3c;
     --th-bg: rgba(28, 28, 30, 0.97);
-    --th-field: #2c2c2e;
-    --th-btn: #3a3a3c;
-    --th-btn-border: #5c5c5e;
-    --th-btn-press: #48484a;
+    --th-field: #323234;
+    --th-field-border: #66666a;
+    --th-btn: #3a3566;
+    --th-btn-border: #7F77DD;
+    --th-btn-fg: #EEEDFE;
+    --th-btn-press: #4a4485;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: dark;
