@@ -9,6 +9,8 @@
     /* Pick boxes get their own solid fill so the text never lands on a white box. */
     --th-field: color-mix(in srgb, var(--th-fg) 12%, var(--th-bg));
     --th-field-border: color-mix(in srgb, var(--th-fg) 38%, transparent);
+    /* Rows of the open list need a solid color (no see-through). */
+    --th-opt-bg: var(--SmartThemeBlurTintColor, #1c1c1e);
     /* Buttons wear the preset purple so they stand apart from the gray boxes. */
     --th-btn: color-mix(in srgb, #7F77DD 30%, var(--th-bg));
     --th-btn-border: #7F77DD;
@@ -260,10 +262,17 @@
 #th-window button.th-btn:active { background: var(--th-btn-press) !important; }
 @media (hover: hover) { #th-window button.th-btn:hover { background: var(--th-btn-press) !important; } }
 #th-window button.th-btn[aria-busy="true"] { opacity: 0.75 !important; }
-.th-window.th-light .th-select option, .th-window.th-light .th-select option:not(:checked),
-.th-window.th-dark .th-select option, .th-window.th-dark .th-select option:not(:checked) {
-    color: var(--th-fg);
-    background-color: var(--th-field);
+/* Open list (PC): every row follows the window colors, the picked row is purple. */
+#th-window select.th-select option,
+#th-window select.th-select option:not(:checked) {
+    color: var(--th-fg) !important;
+    -webkit-text-fill-color: var(--th-fg) !important;
+    background-color: var(--th-opt-bg) !important;
+}
+#th-window select.th-select option:checked {
+    color: var(--th-btn-fg) !important;
+    -webkit-text-fill-color: var(--th-btn-fg) !important;
+    background-color: var(--th-btn) !important;
 }
 
 .th-hound { image-rendering: pixelated; flex: none; display: block; }
@@ -527,6 +536,7 @@
     --th-bg: rgba(247, 245, 240, 0.97);
     --th-field: #ffffff;
     --th-field-border: #b9b4a6;
+    --th-opt-bg: var(--th-field);
     --th-btn: #EEEDFE;
     --th-btn-border: #7F77DD;
     --th-btn-fg: #3C3489;
@@ -541,6 +551,7 @@
     --th-bg: rgba(28, 28, 30, 0.97);
     --th-field: #323234;
     --th-field-border: #66666a;
+    --th-opt-bg: var(--th-field);
     --th-btn: #3a3566;
     --th-btn-border: #7F77DD;
     --th-btn-fg: #EEEDFE;
