@@ -11,11 +11,14 @@
     --th-field-border: color-mix(in srgb, var(--th-fg) 38%, transparent);
     /* Rows of the open list need a solid color (no see-through). */
     --th-opt-bg: var(--SmartThemeBlurTintColor, #1c1c1e);
-    /* Buttons wear the preset purple so they stand apart from the gray boxes. */
-    --th-btn: color-mix(in srgb, #7F77DD 30%, var(--th-bg));
-    --th-btn-border: #7F77DD;
-    --th-btn-fg: var(--th-fg);
-    --th-btn-press: color-mix(in srgb, #7F77DD 45%, var(--th-bg));
+    /* Buttons: filled dark gray on light themes, light gray on dark themes (black-and-white like the hound). */
+    --th-btn: color-mix(in srgb, var(--th-fg) 82%, #808080);
+    --th-btn-border: var(--th-btn);
+    --th-btn-fg: var(--th-opt-bg);
+    --th-btn-press: color-mix(in srgb, var(--th-fg) 62%, #808080);
+    /* The picked row of an open list stays purple. */
+    --th-pick: color-mix(in srgb, #7F77DD 30%, var(--th-opt-bg));
+    --th-pick-fg: var(--th-fg);
     position: fixed;
     top: 50%;
     left: 50%;
@@ -205,7 +208,12 @@
 .th-empty-title { font-size: 16px; font-weight: 600; }
 
 .th-log { display: flex; flex-direction: column; }
-.th-logrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--th-border); }
+.th-logitem { border-top: 1px solid var(--th-border); }
+.th-logrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+.th-logrow .th-chev { flex: none; font-size: 11px; color: var(--th-muted); }
+.th-logdetail { padding: 2px 0 10px 4px; }
+.th-logdetail .th-stack { margin: 0 0 4px; }
+.th-logdetail .th-rows { margin-top: 6px; }
 .th-logmain { flex: 1; min-width: 0; }
 .th-mini { display: flex; width: 72px; height: 8px; border-radius: 3px; overflow: hidden; flex: none; background: color-mix(in srgb, var(--th-fg) 12%, transparent); }
 
@@ -262,6 +270,9 @@
 #th-window button.th-btn:active { background: var(--th-btn-press) !important; }
 @media (hover: hover) { #th-window button.th-btn:hover { background: var(--th-btn-press) !important; } }
 #th-window button.th-btn[aria-busy="true"] { opacity: 0.75 !important; }
+@supports (color: rgb(from red r g b)) {
+    .th-window { --th-btn-fg: rgb(from var(--th-opt-bg) r g b / 1); }
+}
 /* Open list (PC): every row follows the window colors, the picked row is purple. */
 #th-window select.th-select option,
 #th-window select.th-select option:not(:checked) {
@@ -270,9 +281,9 @@
     background-color: var(--th-opt-bg) !important;
 }
 #th-window select.th-select option:checked {
-    color: var(--th-btn-fg) !important;
-    -webkit-text-fill-color: var(--th-btn-fg) !important;
-    background-color: var(--th-btn) !important;
+    color: var(--th-pick-fg) !important;
+    -webkit-text-fill-color: var(--th-pick-fg) !important;
+    background-color: var(--th-pick) !important;
 }
 
 .th-hound { image-rendering: pixelated; flex: none; display: block; }
@@ -539,10 +550,12 @@
     --th-field: #ffffff;
     --th-field-border: #b9b4a6;
     --th-opt-bg: var(--th-field);
-    --th-btn: #EEEDFE;
-    --th-btn-border: #7F77DD;
-    --th-btn-fg: #3C3489;
-    --th-btn-press: #CECBF6;
+    --th-btn: #444441;
+    --th-btn-border: #444441;
+    --th-btn-fg: #F1EFE8;
+    --th-btn-press: #2C2C2A;
+    --th-pick: #EEEDFE;
+    --th-pick-fg: #3C3489;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: light;
@@ -554,10 +567,12 @@
     --th-field: #323234;
     --th-field-border: #66666a;
     --th-opt-bg: var(--th-field);
-    --th-btn: #3a3566;
-    --th-btn-border: #7F77DD;
-    --th-btn-fg: #EEEDFE;
-    --th-btn-press: #4a4485;
+    --th-btn: #D3D1C7;
+    --th-btn-border: #D3D1C7;
+    --th-btn-fg: #2C2C2A;
+    --th-btn-press: #B4B2A9;
+    --th-pick: #3a3566;
+    --th-pick-fg: #EEEDFE;
     color: var(--th-fg);
     background-color: var(--th-bg);
     color-scheme: dark;

@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.10';
+const VERSION = '0.5.11';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -85,6 +85,8 @@ const state = {
     open: false,
     view: 'main',
     expand: { wi: false, ext: false },
+    logOpen: new Set(),   // turns opened in the turn log (by time)
+    logExpand: new Set(), // "<time>:wi" / "<time>:ext" opened inside a turn
     baseHeight: window.innerHeight,
     seq: 0,
 };
@@ -978,6 +980,8 @@ function onChatChanged() {
     state.chatId = ctx().getCurrentChatId?.() || null;
     state.log = loadLog(state.chatId);
     state.latest = lastShown();
+    state.logOpen.clear();
+    state.logExpand.clear();
     state.estimate = null;
     state.current = null;
     state.pendingUsage = null;
@@ -1112,6 +1116,40 @@ function partLabel(rec, k) {
     return k;
 }
 
+// Item rows (main view and an opened turn in the turn log).
+function partsHtml(rec, prev, isOpen, keyOf) {
+    let html = '<div class="th-rows">';
+    for (const k of PART_ORDER) {
+        const v = rec.parts[k] || 0;
+        if (!v && (k === 'examples' || k === 'persona')) continue;
+        const pp = rec.total ? Math.round((v / rec.total) * 100) : 0;
+        const expandable = k === 'wi' || k === 'ext';
+        const open = expandable && isOpen(k);
+        html += `<div class="th-row${expandable ? ' th-click' : ''}" ${expandable ? `data-expand="${esc(keyOf(k))}" role="button" tabindex="0"` : ''}>`
+            + `<span class="th-dot" style="background:${COLORS[k]}"></span>`
+            + `<span class="th-name th-ellipsis">${esc(partLabel(rec, k))}${expandable ? ` <i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i>` : ''}</span>`
+            + deltaHtml(rec, prev, k)
+            + `<span class="th-num">${fmt(v)}</span><span class="th-pct">${pp}%</span></div>`;
+        if (k === 'wi' && open) {
+            html += '<div class="th-sub">';
+            html += (rec.wi || []).length ? rec.wi.slice().sort((a, b) => b.tok - a.tok).map(w => `<div class="th-subrow"><span class="th-ellipsis">${esc(w.n)}</span><span class="th-num">${fmt(w.tok)}</span></div>`).join('') : `<div class="th-muted">${esc(t('wi_none'))}</div>`;
+            html += '</div>';
+        }
+        if (k === 'ext' && open) {
+            html += '<div class="th-sub">';
+            html += (rec.ext || []).length ? rec.ext.map(e => `<div class="th-subrow"><span class="th-ellipsis">${esc(e.label)}</span><span class="th-num">${fmt(e.tok)}</span></div>`).join('') : `<div class="th-muted">${esc(t('ext_none'))}</div>`;
+            html += '</div>';
+        }
+        if (k === 'history') {
+            const cut = Math.max(0, (rec.hist?.all || 0) - (rec.hist?.inc || 0));
+            html += `<div class="th-sub ${cut ? 'th-warntext' : 'th-muted'}">${esc(cut ? t('history_cut', { n: cut }) : t('history_all'))}</div>`;
+            if (rec.hist?.hidden) html += `<div class="th-sub th-muted">${esc(t('history_hidden', { n: rec.hist.hidden }))}</div>`;
+        }
+    }
+    html += '</div>';
+    return html;
+}
+
 function renderMain() {
     const rec = shown();
     if (!rec) {
@@ -1134,35 +1172,7 @@ function renderMain() {
     html += `<div class="th-small th-muted">${esc(t('reply_free', { reply: fmt(rec.reply), free: fmt(free) }))}</div>`;
     if (stage >= 3) html += `<div class="th-warn th-stage${stage}">${esc(t('warn_high'))}</div>`;
 
-    html += '<div class="th-rows">';
-    for (const k of PART_ORDER) {
-        const v = rec.parts[k] || 0;
-        if (!v && (k === 'examples' || k === 'persona')) continue;
-        const pp = rec.total ? Math.round((v / rec.total) * 100) : 0;
-        const expandable = k === 'wi' || k === 'ext';
-        const open = expandable && state.expand[k];
-        html += `<div class="th-row${expandable ? ' th-click' : ''}" ${expandable ? `data-expand="${k}" role="button" tabindex="0"` : ''}>`
-            + `<span class="th-dot" style="background:${COLORS[k]}"></span>`
-            + `<span class="th-name th-ellipsis">${esc(partLabel(rec, k))}${expandable ? ` <i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i>` : ''}</span>`
-            + deltaHtml(rec, prev, k)
-            + `<span class="th-num">${fmt(v)}</span><span class="th-pct">${pp}%</span></div>`;
-        if (k === 'wi' && open) {
-            html += '<div class="th-sub">';
-            html += (rec.wi || []).length ? rec.wi.slice().sort((a, b) => b.tok - a.tok).map(w => `<div class="th-subrow"><span class="th-ellipsis">${esc(w.n)}</span><span class="th-num">${fmt(w.tok)}</span></div>`).join('') : `<div class="th-muted">${esc(t('wi_none'))}</div>`;
-            html += '</div>';
-        }
-        if (k === 'ext' && open) {
-            html += '<div class="th-sub">';
-            html += (rec.ext || []).length ? rec.ext.map(e => `<div class="th-subrow"><span class="th-ellipsis">${esc(e.label)}</span><span class="th-num">${fmt(e.tok)}</span></div>`).join('') : `<div class="th-muted">${esc(t('ext_none'))}</div>`;
-            html += '</div>';
-        }
-        if (k === 'history') {
-            const cut = Math.max(0, (rec.hist?.all || 0) - (rec.hist?.inc || 0));
-            html += `<div class="th-sub ${cut ? 'th-warntext' : 'th-muted'}">${esc(cut ? t('history_cut', { n: cut }) : t('history_all'))}</div>`;
-            if (rec.hist?.hidden) html += `<div class="th-sub th-muted">${esc(t('history_hidden', { n: rec.hist.hidden }))}</div>`;
-        }
-    }
-    html += '</div>';
+    html += partsHtml(rec, prev, k => !!state.expand[k], k => k);
 
     // Cache
     const ch = rec.cache;
@@ -1235,12 +1245,33 @@ function renderButtons() {
 function renderLog() {
     const list = shownLog();
     if (!list.length) return `<div class="th-muted th-pad">${esc(t('log_empty'))}</div>`;
-    return '<div class="th-log">' + list.reverse().map(r => {
+    return '<div class="th-log">' + list.map((r, i) => {
         const pct = pctOf(r);
+        const open = state.logOpen.has(r.t);
         const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        return `<div class="th-logrow">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-ellipsis">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
-            + `<div class="th-mini">${barSegments(r)}</div></div>`;
-    }).join('') + '</div>';
+        let html = `<div class="th-logitem${open ? ' th-open' : ''}">`
+            + `<div class="th-logrow th-click" data-logrow="${r.t}" role="button" tabindex="0" aria-expanded="${open}">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-ellipsis">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
+            + `<div class="th-mini">${barSegments(r)}</div><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} th-chev"></i></div>`;
+        if (open) html += logDetailHtml(r, list[i - 1] || null);
+        return html + '</div>';
+    }).reverse().join('') + '</div>';
+}
+
+// What one saved turn looked like (opened below its row in the turn log).
+function logDetailHtml(rec, prev) {
+    const free = Math.max(0, rec.max - rec.total - rec.reply);
+    let html = '<div class="th-logdetail">';
+    html += `<div class="th-stack">${barSegments(rec)}</div>`;
+    html += `<div class="th-small th-muted">${esc(t('reply_free', { reply: fmt(rec.reply), free: fmt(free) }))}</div>`;
+    html += partsHtml(rec, prev, k => state.logExpand.has(`${rec.t}:${k}`), k => `${rec.t}:${k}`);
+    const ch = rec.cache;
+    if (ch && ch.state !== 'first') {
+        html += `<div class="th-small">${esc(ch.state === 'same' ? t('cache_same') : t('cache_changed', { where: ch.where, pct: ch.pct }))}</div>`;
+    }
+    if (rec.out) {
+        html += `<div class="th-small th-muted">${esc(t('reply_text', { n: fmt(rec.out.text) }))}${rec.out.reason ? ` · ${esc(t('reply_reasoning', { n: fmt(rec.out.reason) }))}` : ''}</div>`;
+    }
+    return html + '</div>';
 }
 
 function selectHtml(id, value, options) {
@@ -1310,7 +1341,7 @@ function ensureWindow() {
     win.addEventListener('click', onWindowClick);
     win.addEventListener('change', onWindowChange);
     win.addEventListener('keydown', (e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target?.dataset?.expand) { e.preventDefault(); e.target.click(); }
+        if ((e.key === 'Enter' || e.key === ' ') && (e.target?.dataset?.expand || e.target?.dataset?.logrow)) { e.preventDefault(); e.target.click(); }
         if (e.key === 'Escape') closeWindow();
     });
     return win;
@@ -1390,10 +1421,21 @@ async function copySummary() {
 }
 
 function onWindowClick(e) {
-    const el = e.target.closest('[data-act],[data-expand]');
+    const el = e.target.closest('[data-act],[data-expand],[data-logrow]');
     if (!el) return;
+    if (el.dataset.logrow) {
+        const key = Number(el.dataset.logrow);
+        if (state.logOpen.has(key)) state.logOpen.delete(key); else state.logOpen.add(key);
+        render();
+        return;
+    }
     if (el.dataset.expand) {
-        state.expand[el.dataset.expand] = !state.expand[el.dataset.expand];
+        const key = el.dataset.expand;
+        if (key.includes(':')) {
+            if (state.logExpand.has(key)) state.logExpand.delete(key); else state.logExpand.add(key);
+        } else {
+            state.expand[key] = !state.expand[key];
+        }
         render();
         return;
     }
@@ -1923,7 +1965,8 @@ function houseX(lane, el) {
         const p = JSON.parse(localStorage.getItem(HOUSE_POS_KEY) || 'null');
         if (p && Number.isFinite(p.x)) ratio = p.x;
     } catch { /* ignore */ }
-    return ratio === null ? 4 : Math.min(max, Math.max(4, ratio * max));
+    // Same formula as the one used when the house is dropped (see bindHouseDrag).
+    return ratio === null ? 4 : Math.min(max, Math.max(4, 4 + ratio * (max - 4)));
 }
 
 function bindHouseDrag(el) {
