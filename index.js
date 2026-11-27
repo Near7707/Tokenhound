@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -23,6 +23,7 @@ const DEFAULTS = Object.freeze({
     enabled: true,
     display: 'walk',
     barOn: false,
+    barHound: true,
     fabStyle: 'line',
     tapOpens: 'card',
     lang: 'auto',
@@ -157,6 +158,7 @@ function loadSettings() {
     if (s.display === 'bar') { s.display = 'menu'; s.barOn = true; }
     if (!DISPLAYS.includes(s.display)) s.display = DEFAULTS.display;
     s.barOn = !!s.barOn;
+    s.barHound = s.barHound !== false;
     if (!FAB_STYLES.includes(s.fabStyle)) s.fabStyle = DEFAULTS.fabStyle;
     if (!TAP_OPENS.includes(s.tapOpens)) s.tapOpens = DEFAULTS.tapOpens;
     delete s.showBar; // 0.1.0 setting
@@ -275,7 +277,11 @@ async function readIndex() {
 function mergeTurns(local, remote, cutoff) {
     const byT = new Map();
     for (const r of remote || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
-    for (const r of local || []) if (r && Number.isFinite(r.t)) byT.set(r.t, r);
+    for (const r of local || []) {
+        if (!r || !Number.isFinite(r.t)) continue;
+        const o = byT.get(r.t);
+        byT.set(r.t, o?.void && !r.void && !r.out ? { ...r, void: true, awaitingReply: false } : r);
+    }
     return [...byT.values()].filter(r => r.t > cutoff).sort((x, y) => x.t - y.t).slice(-settings.logSize);
 }
 
@@ -285,7 +291,7 @@ function adoptMerged(chatId, merged) {
     if (state.chatId !== chatId) return;
     const before = state.log;
     state.log = merged;
-    const last = merged[merged.length - 1] || null;
+    const last = lastShown();
     if (!state.latest || !last || last.t !== state.latest.t) state.latest = last;
     try { localStorage.setItem(LOG_PREFIX + chatId, JSON.stringify({ v: LOG_FORMAT, turns: merged })); } catch { /* ignore */ }
     if (!sameTurns(before, merged)) render();
@@ -586,6 +592,8 @@ async function analyze(msgs, cur) {
         if (chat[i].is_system) hidden++;
         else visible.push(i);
     }
+    // A swipe rewrites the last reply, so that message is not in the prompt on purpose.
+    if (cur?.type === 'swipe' && visible.length && !chat[visible[visible.length - 1]].is_user) visible.pop();
     let inc = 0;
     let misses = 0;
     let histStart = Infinity;
@@ -695,19 +703,23 @@ async function runAnalysis(msgs, cur) {
         const rec = await analyze(msgs, cur);
         if (cur.chatId !== ctx().getCurrentChatId?.()) return; // chat changed meanwhile
         const prevTexts = state.prevPrompt.get(cur.chatId) || null;
-        const prevRec = state.log[state.log.length - 1] || null;
+        const prevRec = lastShown();
         rec.cache = rec.est ? null : cacheDiff(rec, prevTexts, prevRec);
         if (rec.est) {
             state.estimate = stripPrivate(rec);
         } else {
+            cur.prevTexts = prevTexts;
+            cur.texts = rec._texts;
             state.prevPrompt.set(cur.chatId, rec._texts);
             const clean = stripPrivate(rec);
+            cur.rec = clean;
             state.log.push(clean);
             state.latest = clean;
             state.estimate = null;
             const up = cur.usagePending;
             if (up) { up.rec = clean; if (up.onRec) { up.onRec(clean); up.onRec = null; } }
             if (cur.pendingReply) { await attachReply(clean, cur.pendingReply); }
+            else if (cur.ended) settleTurn(cur);
             saveLog();
         }
         render();
@@ -858,18 +870,54 @@ function onCombinePrompts(data) {
 
 function onMessageReceived(messageId, type) {
     if (!settings.enabled || type === 'quiet') return;
-    const rec = state.latest;
-    if (rec && rec.awaitingReply && Date.now() - rec.t < 30 * 60 * 1000) {
-        attachReply(rec, messageId).then(() => { saveLog(); render(); });
+    // The newest turn, even a hidden one: a reply can still come in after "stop".
+    const rec = state.log[state.log.length - 1];
+    if (rec && !rec.est && (rec.awaitingReply || (rec.void && !rec.out)) && Date.now() - rec.t < 30 * 60 * 1000) {
+        attachReply(rec, messageId).then(() => {
+            if (rec.void && rec.out) { delete rec.void; state.latest = rec; }
+            saveLog(); render();
+        });
     } else if (state.current && state.current.done && !state.current.est) {
         state.current.pendingReply = messageId; // analysis still running
     }
 }
 
+// A turn that ends with no reply and no usage (stop, swipe stop, error) is hidden,
+// so the card and window keep showing the turn before it.
+const SETTLE_MS = 2000;
+
+function settleTurn(cur) {
+    const chatId = cur.chatId;
+    setTimeout(() => {
+        if (state.chatId !== chatId || !cur.rec) return;
+        const rec = state.log.find(r => r.t === cur.rec.t);
+        if (!rec || !rec.awaitingReply) return; // the reply came in
+        rec.awaitingReply = false;
+        if (!rec.out && !rec.usage) {
+            rec.void = true;
+            if (rec.usageState === 'waiting') rec.usageState = 'none';
+            if (state.latest === rec) state.latest = lastShown();
+            // Compare the next turn with the turn before this one.
+            if (state.prevPrompt.get(chatId) === cur.texts) {
+                if (cur.prevTexts) state.prevPrompt.set(chatId, cur.prevTexts);
+                else state.prevPrompt.delete(chatId);
+            }
+        }
+        saveLog();
+        render();
+    }, SETTLE_MS);
+}
+
 function onGenerationDone() {
     state.generating = false;
+    const cur = state.current;
+    if (cur && !cur.est && cur.done && !cur.ended) {
+        cur.ended = true;
+        if (cur.rec) settleTurn(cur); // otherwise runAnalysis does it when it finishes
+    }
+    // A turn that isn't the one being settled (rare): just stop waiting, as before.
     const rec = state.latest;
-    if (rec && rec.awaitingReply) { rec.awaitingReply = false; saveLog(); render(); }
+    if (rec && rec.awaitingReply && rec !== cur?.rec) { rec.awaitingReply = false; saveLog(); render(); }
     // If the API never reported usage, stop showing "waiting".
     setTimeout(() => {
         const r = state.latest;
@@ -880,7 +928,7 @@ function onGenerationDone() {
 function onChatChanged() {
     state.chatId = ctx().getCurrentChatId?.() || null;
     state.log = loadLog(state.chatId);
-    state.latest = state.log[state.log.length - 1] || null;
+    state.latest = lastShown();
     state.estimate = null;
     state.current = null;
     state.pendingUsage = null;
@@ -932,6 +980,25 @@ async function runEstimate() {
 
 function shown() {
     return state.estimate || state.latest;
+}
+
+/** Turns to show: a turn that ended with no reply and no usage (stopped, failed) stays hidden. */
+function shownLog() {
+    return state.log.filter(r => !r.void);
+}
+
+function lastShown() {
+    for (let i = state.log.length - 1; i >= 0; i--) if (!state.log[i].void) return state.log[i];
+    return null;
+}
+
+function prevShown(rec) {
+    if (!rec) return null;
+    for (let i = state.log.length - 1; i >= 0; i--) {
+        const r = state.log[i];
+        if (!r.void && r.t < rec.t) return r;
+    }
+    return null;
 }
 
 function pctOf(rec) {
@@ -999,7 +1066,7 @@ function renderMain() {
     if (!rec) {
         return `<div class="th-empty">${houndSvg(1, 3)}<div class="th-empty-title">${esc(t('empty_title'))}</div><div class="th-muted">${esc(t('empty_body'))}</div></div>${renderButtons()}`;
     }
-    const prev = rec.est ? state.latest : state.log[state.log.length - 2];
+    const prev = rec.est ? state.latest : prevShown(rec);
     const pct = pctOf(rec);
     const stage = stageOf(pct);
     const free = Math.max(0, rec.max - rec.total - rec.reply);
@@ -1090,7 +1157,7 @@ function renderMain() {
     }
 
     // Trend
-    const turns = state.log.slice(-20);
+    const turns = shownLog().slice(-20);
     if (turns.length >= 2) {
         const maxV = Math.max(...turns.map(x => x.total), 1) * 1.1;
         const pts = turns.map((x, i) => `${((i / (turns.length - 1)) * 300).toFixed(1)},${(44 - (x.total / maxV) * 40).toFixed(1)}`).join(' ');
@@ -1110,8 +1177,9 @@ function renderButtons() {
 }
 
 function renderLog() {
-    if (!state.log.length) return `<div class="th-muted th-pad">${esc(t('log_empty'))}</div>`;
-    return '<div class="th-log">' + state.log.slice().reverse().map(r => {
+    const list = shownLog();
+    if (!list.length) return `<div class="th-muted th-pad">${esc(t('log_empty'))}</div>`;
+    return '<div class="th-log">' + list.reverse().map(r => {
         const pct = pctOf(r);
         const time = new Date(r.t).toLocaleString(lang() === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         return `<div class="th-logrow">${houndSvg(stageOf(pct), 1)}<div class="th-logmain"><div class="th-ellipsis">${esc(t('log_item', { total: fmt(r.total), pct }))}</div><div class="th-small th-muted th-ellipsis">${esc(time)} · ${esc(r.model || t('no_model'))}</div></div>`
@@ -1145,6 +1213,7 @@ function renderQuickSettings() {
         + check('th-q-enabled', settings.enabled, t('set_enabled'))
         + `<label class="th-field"><span>${esc(t('set_display'))}</span>${selectHtml('th-q-display', settings.display, displayOptions())}</label>`
         + check('th-q-bar', settings.barOn, t('set_bar'))
+        + (settings.barOn ? check('th-q-barhound', settings.barHound, t('set_bar_hound')) : '')
         + (settings.display === 'button' ? `<label class="th-field"><span>${esc(t('set_fab_style'))}</span>${selectHtml('th-q-fabstyle', settings.fabStyle, fabStyleOptions())}</label>` : '')
         + (settings.display !== 'menu' ? `<label class="th-field"><span>${esc(t('set_tap'))}</span>${selectHtml('th-q-tap', settings.tapOpens, tapOptions())}</label>` : '')
         + check('th-q-usage', settings.readUsage, t('set_usage'))
@@ -1270,6 +1339,7 @@ function onWindowChange(e) {
         case 'th-q-enabled': settings.enabled = el.checked; break;
         case 'th-q-display': settings.display = el.value; break;
         case 'th-q-bar': settings.barOn = el.checked; break;
+        case 'th-q-barhound': settings.barHound = el.checked; break;
         case 'th-q-fabstyle': settings.fabStyle = el.value; break;
         case 'th-q-tap': settings.tapOpens = el.value; break;
         case 'th-q-usage': settings.readUsage = el.checked; break;
@@ -1303,7 +1373,7 @@ function renderBar() {
     const stage = stageOf(pct);
     bar.title = `${t('open')} · ${t('stage_' + stage)}`;
     bar.setAttribute('aria-label', bar.title);
-    bar.innerHTML = `${houndSvg(stage, 1.25)}<span class="th-bar-track">${barSegments(rec)}</span>`
+    bar.innerHTML = `${settings.barHound ? houndSvg(stage, 1.25) : ''}<span class="th-bar-track">${barSegments(rec)}</span>`
         + `<span class="th-bar-text">${rec ? `<span class="th-bar-pct${pctClass(stage)}">${pct}%</span> · ${short(rec.total)}${rec.est ? ' ~' : ''}` : '—'}</span>`;
 }
 
@@ -1475,7 +1545,7 @@ function cardHtml() {
     const rec = shown();
     const more = `<div class="th-card-foot"><button class="th-card-more" data-act="more">${esc(t('card_more'))} <i class="fa-solid fa-chevron-right"></i></button></div>`;
     if (!rec) return `<div class="th-muted">${esc(t('card_empty'))}</div>${more}`;
-    const prev = rec.est ? state.latest : state.log[state.log.length - 2];
+    const prev = rec.est ? state.latest : prevShown(rec);
     const pct = pctOf(rec);
     const stage = stageOf(pct);
     const totalDelta = prev ? rec.total - (prev.total || 0) : 0;
@@ -1668,6 +1738,7 @@ ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 ${chk('th-p-bar', t('set_bar'))}
+${chk('th-p-barhound', t('set_bar_hound'))}
 <label for="th-p-fabstyle">${esc(t('set_fab_style'))}</label>
 <select id="th-p-fabstyle" class="text_pole">${fabStyleOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
 <label for="th-p-tap">${esc(t('set_tap'))}</label>
@@ -1697,6 +1768,7 @@ function syncPanel() {
     $('th-p-enabled').checked = settings.enabled;
     $('th-p-display').value = settings.display;
     $('th-p-bar').checked = settings.barOn;
+    $('th-p-barhound').checked = settings.barHound;
     $('th-p-fabstyle').value = settings.fabStyle;
     $('th-p-tap').value = settings.tapOpens;
     $('th-p-sync').checked = settings.serverSync;
@@ -1725,6 +1797,7 @@ function buildPanel() {
             case 'th-p-enabled': settings.enabled = el.checked; break;
             case 'th-p-display': settings.display = el.value; break;
             case 'th-p-bar': settings.barOn = el.checked; break;
+            case 'th-p-barhound': settings.barHound = el.checked; break;
             case 'th-p-fabstyle': settings.fabStyle = el.value; break;
             case 'th-p-tap': settings.tapOpens = el.value; closeCard(); break;
             case 'th-p-sync':
@@ -1771,6 +1844,15 @@ function buildPanel() {
     });
 }
 
+// The wand menu draws the hound as a plain image: iPhone Safari sometimes skips
+// painting an inline SVG with a filter inside the blurred, see-through menu.
+function houndImg(stage, scale) {
+    const svg = houndSvg(stage, scale).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+    const w = Math.round(28 * scale);
+    const h = Math.round(16 * scale);
+    return `<img class="th-menu-img" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" width="${w}" height="${h}" alt="" draggable="false">`;
+}
+
 function rebuildMenu() {
     const menu = document.getElementById('extensionsMenu');
     if (!menu) return;
@@ -1779,7 +1861,7 @@ function rebuildMenu() {
     item.id = 'th-menu';
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
-    item.innerHTML = `<div class="th-menu-icon extensionsMenuExtensionButton">${houndSvg(1, 0.75)}</div><span>${esc(t('title'))}</span>`;
+    item.innerHTML = `<div class="th-menu-icon extensionsMenuExtensionButton">${houndImg(1, 0.75)}</div><span>${esc(t('title'))}</span>`;
     item.addEventListener('click', () => openWindow());
     menu.appendChild(item);
 }
@@ -1806,7 +1888,7 @@ async function init() {
         document.addEventListener('visibilitychange', () => { if (!document.hidden && settings.display === 'walk') render(); });
         state.chatId = ctx().getCurrentChatId?.() || null;
         state.log = loadLog(state.chatId);
-        state.latest = state.log[state.log.length - 1] || null;
+        state.latest = lastShown();
         render();
         pullLog(true);
     } catch (e) {

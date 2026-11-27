@@ -249,6 +249,7 @@
 
 /* Wand menu */
 .th-menu-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.4em; }
+.th-menu-img { display: block; flex: none; image-rendering: pixelated; pointer-events: none; }
 
 /* Extensions settings panel: keep SillyTavern's own sizes */
 .th-panel .inline-drawer-content { display: flex; flex-direction: column; gap: 4px; }
