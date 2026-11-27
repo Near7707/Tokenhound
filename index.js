@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houseSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.6';
+const VERSION = '0.5.7';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -1701,22 +1701,41 @@ function renderCard() {
 // ---------- wandering hound (walks along the top edge of the input) ----------
 
 const walk = { timer: null, x: 8, dir: 1, tick: 0, pause: 0, key: '', bubbleUntil: 0, lastT: null, roll: 0 };
-const WALK_SCALE = 1.25;
-const DOG_W = 28 * WALK_SCALE;
-const DOG_H = 16 * WALK_SCALE;
-// Donut the hound plays with: size, ring width, and where it sits next to the hound.
-const TOYS = {
-    nose: { size: 20, w: 4, left: 25 * WALK_SCALE, bottom: 0, dogBottom: 0 }, // rolled ahead by the nose
-    ride: { size: 30, w: 6, left: 0, bottom: 0, dogBottom: 30 - WALK_SCALE }, // the hound balances on top
+// Phone: 1.25x. PC: 2x so the hound isn't tiny on a wide screen (2x keeps every dot the same size).
+// Donuts grow by the same ratio.
+const WALK_PHONE = {
+    scale: 1.25,
+    nose: { size: 20, w: 4, font: 9 },
+    ride: { size: 30, w: 6, font: 11 },
+};
+const WALK_PC = {
+    scale: 2,
+    nose: { size: 32, w: 6, font: 13 },
+    ride: { size: 48, w: 10, font: 16 },
 };
 
+function walkDims() {
+    const d = isMobile() ? WALK_PHONE : WALK_PC;
+    const sc = d.scale;
+    return {
+        scale: sc,
+        w: 28 * sc,
+        h: 16 * sc,
+        toys: {
+            nose: { ...d.nose, left: 25 * sc, bottom: 0, dogBottom: 0 }, // rolled ahead by the nose
+            ride: { ...d.ride, left: 0, bottom: 0, dogBottom: d.ride.size - sc }, // the hound balances on top
+        },
+    };
+}
+
 function walkToy() {
-    return settings.display === 'walk' ? TOYS[settings.walkToy] || null : null;
+    return settings.display === 'walk' ? walkDims().toys[settings.walkToy] || null : null;
 }
 
 function rigSize(toy) {
-    if (!toy) return { w: DOG_W, h: DOG_H };
-    return { w: Math.max(DOG_W, toy.left + toy.size), h: Math.max(DOG_H + toy.dogBottom, toy.size) };
+    const { w, h } = walkDims();
+    if (!toy) return { w, h };
+    return { w: Math.max(w, toy.left + toy.size), h: Math.max(h + toy.dogBottom, toy.size) };
 }
 
 function reducedMotion() {
@@ -1763,14 +1782,15 @@ function walkStep() {
     const toy = walkToy();
     const showBubble = !toy && Date.now() < walk.bubbleUntil;
     const label = rec ? `${pct}${rec.est ? '~' : ''}` : '—';
-    const key = `${frame}:${walk.dir}:${showBubble}:${label}:${settings.walkToy}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
+    const dims = walkDims();
+    const key = `${frame}:${walk.dir}:${showBubble}:${label}:${settings.walkToy}:${dims.scale}:${rec ? `${rec.t}:${rec.total}:${rec.reply}` : ''}`;
     dog.style.left = `${Math.round(walk.x)}px`;
     if (key !== walk.key) {
         walk.key = key;
-        const sprite = frame === 'walk' ? houndSvg(1, WALK_SCALE, true)
-            : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, WALK_SCALE);
+        const sprite = frame === 'walk' ? houndSvg(1, dims.scale, true)
+            : houndSvg(frame === 'sleep' ? 4 : frame === 'pant' ? 3 : frame === 'sniff' ? 2 : 1, dims.scale);
         dog.classList.toggle('th-flip', walk.dir < 0);
-        const num = `<span class="th-ring-num${pctClass(stage)}">${label}</span>`;
+        const num = `<span class="th-ring-num${pctClass(stage)}"${toy ? ` style="font-size:${toy.font}px"` : ''}>${label}</span>`;
         if (toy) {
             const { w, h } = rigSize(toy);
             dog.innerHTML = `<span class="th-rig" style="width:${w}px;height:${h}px">`
@@ -1778,7 +1798,7 @@ function walkStep() {
                 + `<span class="th-toy th-toy-${settings.walkToy}" style="left:${toy.left}px;bottom:${toy.bottom}px;width:${toy.size}px;height:${toy.size}px">`
                 + `<span class="th-toy-spin">${donutSvg(rec, toy.size, toy.w, true)}</span>${num}</span></span>`;
         } else {
-            dog.innerHTML = `<span class="th-rig" style="width:${DOG_W}px;height:${DOG_H}px"><span class="th-walk-dog">${sprite}</span></span>`
+            dog.innerHTML = `<span class="th-rig" style="width:${dims.w}px;height:${dims.h}px"><span class="th-walk-dog">${sprite}</span></span>`
                 + `<span class="th-walk-bubble${showBubble ? ' th-show' : ''}">${donutSvg(rec)}${num}</span>`;
         }
     }
@@ -2022,7 +2042,7 @@ function render() {
 
 function panelHtml() {
     const chk = (id, label) => `<label class="checkbox_label" for="${id}"><input type="checkbox" id="${id}"><span>${esc(label)}</span></label>`;
-    return `<div id="th-panel" class="th-panel"><div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b class="th-panel-name">${houndImg(1, 0.75)}Tokenhound</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content">
+    return `<div id="th-panel" class="th-panel"><div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b class="th-panel-name">${houndImg(1)}Tokenhound</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content">
 ${chk('th-p-enabled', t('set_enabled'))}
 <label for="th-p-display">${esc(t('set_display'))}</label>
 <select id="th-p-display" class="text_pole">${displayOptions().map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
@@ -2156,10 +2176,13 @@ function buildPanel() {
 
 // The wand menu draws the hound as a plain image: iPhone Safari sometimes skips
 // painting an inline SVG with a filter inside the blurred, see-through menu.
-function houndImg(stage, scale) {
-    const svg = houndSvg(stage, scale).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
-    const w = Math.round(28 * scale);
-    const h = Math.round(16 * scale);
+// Drawn at 1x with the empty edge cut off (23 x 14): shrinking the dots below 1px broke the picture on PC.
+function houndImg(stage) {
+    const w = 23;
+    const h = 14;
+    const svg = houndSvg(stage, 1)
+        .replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')
+        .replace('viewBox="0 0 28 16" width="28" height="16"', `viewBox="2 1 ${w} ${h}" width="${w}" height="${h}"`);
     return `<img class="th-menu-img" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" width="${w}" height="${h}" alt="" draggable="false">`;
 }
 
@@ -2171,7 +2194,7 @@ function rebuildMenu() {
     item.id = 'th-menu';
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
-    item.innerHTML = `<div class="th-menu-icon extensionsMenuExtensionButton">${houndImg(1, 0.75)}</div><span>${esc(t('title'))}</span>`;
+    item.innerHTML = `<div class="th-menu-icon extensionsMenuExtensionButton">${houndImg(1)}</div><span>${esc(t('title'))}</span>`;
     item.addEventListener('click', () => openWindow());
     menu.appendChild(item);
 }
