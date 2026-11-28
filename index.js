@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.27';
+const VERSION = '0.5.28';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -2680,7 +2680,7 @@ function onMainScreen() {
 }
 
 function renderDisplay() {
-    // "Walk around the main screen too" off: outside a chat the hound stays out of sight.
+    // "Walk outside chats too" off: outside a chat the hound stays out of sight.
     const away = !settings.mainWalk && onMainScreen();
     const mode = settings.enabled && !away ? settings.display : 'menu';
     const barOn = settings.enabled && settings.barOn && !away;
