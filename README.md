@@ -8,11 +8,7 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 
 <p align="center"><img src="images/moods-en.png" width="640" alt=""></p>
 
-<table align="center"><tr>
-<td valign="top"><img src="images/ride-en.png" width="250" alt=""></td>
-<td valign="top"><img src="images/card-en.png" width="250" alt=""></td>
-<td valign="top"><img src="images/window-en.png" width="250" alt=""></td>
-</tr></table>
+<p align="center"><img src="images/screens-en.png" alt=""></p>
 
 <p align="center"><sub>Example screens with a made-up chat. Your screen may look a little different.</sub></p>
 
@@ -72,11 +68,7 @@ Group chats are supported. The card row shows the name of the character who is s
 
 <p align="center"><img src="images/moods-ko.png" width="640" alt=""></p>
 
-<table align="center"><tr>
-<td valign="top"><img src="images/ride-ko.png" width="250" alt=""></td>
-<td valign="top"><img src="images/card-ko.png" width="250" alt=""></td>
-<td valign="top"><img src="images/window-ko.png" width="250" alt=""></td>
-</tr></table>
+<p align="center"><img src="images/screens-ko.png" alt=""></p>
 
 <p align="center"><sub>지어낸 대화로 만든 예시 화면이에요. 실제 화면과 조금 다를 수 있어요.</sub></p>
 
