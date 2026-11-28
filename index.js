@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.24';
+const VERSION = '0.5.25';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -32,7 +32,7 @@ const DEFAULTS = Object.freeze({
     barHound: true,
     fabStyle: 'line',
     tapOpens: 'card',
-    barTap: 'window',
+    barTap: 'card',
     walkToy: 'off',
     houseNum: 'sign',
     mainWalk: true,
@@ -42,7 +42,7 @@ const DEFAULTS = Object.freeze({
     serverSync: true,
     showEstimate: true,
     logSize: 50,
-    stages: [50, 85, 95],
+    stages: [45, 65, 85],
     exportScope: 'chat',
     exportWhat: 'all',
     exportNames: true,
@@ -195,6 +195,13 @@ function loadSettings() {
     s.exportNames = s.exportNames !== false;
     s.exportModels = s.exportModels !== false;
     delete s.showBar; // 0.1.0 setting
+    // 0.5.25 new defaults: move people still on the old defaults (changed values stay as they are).
+    if (!(Number(s.defaultsRev) >= 1)) {
+        if (s.stages.join() === '50,85,95') s.stages = DEFAULTS.stages.slice();
+        if (s.barTap === 'window') s.barTap = DEFAULTS.barTap;
+        s.defaultsRev = 1;
+        try { c.saveSettingsDebounced?.(); } catch { /* saved with the next change */ }
+    }
     settings = s;
 }
 

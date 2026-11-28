@@ -9,7 +9,7 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 ## Features
 
 - **Choose how it shows on screen**: a hound that wanders along the input box (default), a hound resting by its doghouse on the edge of the input (drag it left or right), a small button you can drag anywhere, or nothing at all (open it from the wand menu). You can also turn on a bar above the input, alone or together with the others. The bar shows each part in its own color. The small button can show a tiny bar under the hound, a ring around it, or just the number. The wandering hound can also play with the ring (off by default): roll it along with its nose, or ride on top of it. The number then stays on the ring instead of popping up after each reply. The resting hound peeks out, lies down, and dozes off; a reply wakes it up. It shows the number on a nameplate (with a pop-up after each reply) or on a donut pillow. Turn off "Walk around the main screen too" to hide the hound when no chat is open.
-- **Quick card**: tap the hound or the button to see what changed since the last turn: the total, the parts that changed most, the cache, and the API usage. Tap **Details** for the full window. You can make a tap open the full window right away instead. Tapping the bar above the input opens the full window by default, or the quick card if you choose.
+- **Quick card**: tap the hound or the button to see what changed since the last turn: the total, the parts that changed most, the cache, and the API usage. Tap **Details** for the full window. You can make a tap open the full window right away instead. Tapping the bar above the input also opens the quick card by default, or the full window if you choose.
 - **Breakdown**: tokens and percent for each part of the prompt. Shows the change from the last turn.
 - **World info and extensions**: tap to see each world info entry and each extension prompt.
 - **Chat history**: how many messages fit, and how many older ones were left out. Hidden messages aren't sent to the AI, so they aren't counted.
@@ -22,7 +22,7 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 - **Theme**: auto (follows your SillyTavern theme), light, or dark.
 - English and Korean. By default it follows your SillyTavern language.
 
-The hound has four moods: relaxed, sniffing, panting, and sleepy. You can change the steps (default 50 / 85 / 95%) in the settings.
+The hound has four moods: relaxed, sniffing, panting, and sleepy. You can change the steps (default 45 / 65 / 85%) in the settings.
 
 ## Install
 
@@ -63,7 +63,7 @@ Group chats are supported. The card row shows the name of the character who is s
 ### 기능
 
 - **화면 표시 방식 고르기**: 입력칸 위를 돌아다니는 강아지(기본), 입력칸 위에서 집에 쉬는 강아지(좌우로 끌어서 옮기기), 끌어서 아무 데나 옮길 수 있는 작은 버튼, 아무것도 안 띄우기(마법봉 메뉴에서 열기) 중에 골라요. 입력칸 위 막대는 따로 켤 수 있어서 혼자 쓰거나 다른 방식과 같이 쓸 수 있어요. 막대는 항목마다 다른 색으로 나눠 보여 줘요. 작은 버튼은 하운드 밑 작은 막대, 하운드 둘레 도넛, 숫자만 중에서 모양을 고를 수 있어요. 돌아다니는 강아지에게 도넛을 줄 수도 있어요(기본은 꺼짐). 코로 굴리기나 도넛 타기를 고르면 답이 올 때 뜨는 말풍선 대신 도넛에 숫자가 늘 보여요. 집에서 쉬는 강아지는 빼꼼 내다보다가 엎드리고, 조금 지나면 잠들어요. 답이 오면 깨요. 숫자는 문패(답이 오면 말풍선도)나 도넛 베개로 보여 줘요. "메인 화면에서도 산책하기"를 끄면 채팅방 밖에서는 강아지가 숨어요.
-- **짧은 카드**: 강아지나 버튼을 누르면 지난 턴보다 바뀐 것만 작게 보여 줘요. 전체 토큰, 많이 바뀐 항목, 캐시, API 사용량이 나와요. **자세히**를 누르면 큰 창이 열려요. 누를 때 큰 창이 바로 열리게 바꿀 수도 있어요. 입력칸 위 막대는 누르면 큰 창이 열리고(기본), 짧은 카드로 바꿀 수도 있어요.
+- **짧은 카드**: 강아지나 버튼을 누르면 지난 턴보다 바뀐 것만 작게 보여 줘요. 전체 토큰, 많이 바뀐 항목, 캐시, API 사용량이 나와요. **자세히**를 누르면 큰 창이 열려요. 누를 때 큰 창이 바로 열리게 바꿀 수도 있어요. 입력칸 위 막대도 누르면 짧은 카드가 열리고(기본), 큰 창으로 바꿀 수도 있어요.
 - **항목별 토큰**: 항목마다 토큰과 비율을 보여 주고, 지난 턴보다 얼마나 늘고 줄었는지도 보여 줘요.
 - **로어북과 확장**: 누르면 로어북 항목별, 확장별로 펼쳐서 볼 수 있어요.
 - **대화 기록**: 메시지가 몇 개 들어갔고, 오래된 메시지가 몇 개 빠졌는지 보여 줘요. 숨긴 메시지는 AI에게 가지 않아서 세지 않아요.
@@ -76,7 +76,7 @@ Group chats are supported. The card row shows the name of the character who is s
 - **테마**: 자동(실리태번 테마 따라가기) / 라이트 / 다크 중에 고를 수 있어요.
 - 영어와 한국어를 지원해요. 처음에는 실리태번 언어 설정을 따라가요.
 
-하운드 표정은 느긋함, 킁킁, 헥헥, 졸음 네 단계예요. 단계 기준(기본 50 / 85 / 95%)은 설정에서 바꿀 수 있어요.
+하운드 표정은 느긋함, 킁킁, 헥헥, 졸음 네 단계예요. 단계 기준(기본 45 / 65 / 85%)은 설정에서 바꿀 수 있어요.
 
 ### 설치
 
