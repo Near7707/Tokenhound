@@ -6,6 +6,16 @@ A SillyTavern extension that sniffs out where your prompt tokens go.
 
 Tokenhound shows how much of the context each part of the prompt used: preset, character card, persona, world info, extensions, and chat history. A small black-and-white pixel hound keeps you company on screen. It gets more tired as the context fills up.
 
+<p align="center"><img src="images/moods-en.png" width="640" alt=""></p>
+
+<table align="center"><tr>
+<td valign="top"><img src="images/ride-en.png" width="250" alt=""></td>
+<td valign="top"><img src="images/card-en.png" width="250" alt=""></td>
+<td valign="top"><img src="images/window-en.png" width="250" alt=""></td>
+</tr></table>
+
+<p align="center"><sub>Example screens with a made-up chat. Your screen may look a little different.</sub></p>
+
 ## Features
 
 - **Choose how it shows on screen**: a hound that wanders along the input box (default), a hound resting by its doghouse on the edge of the input (drag it left or right), a small button you can drag anywhere, or nothing at all (open it from the wand menu). You can also turn on a bar above the input, alone or together with the others. The bar shows each part in its own color. The small button can show a tiny bar under the hound, a ring around it, or just the number. The wandering hound can also play with the ring (off by default): roll it along with its nose, or ride on top of it. The number then stays on the ring instead of popping up after each reply. The resting hound peeks out, lies down, and dozes off; a reply wakes it up. It shows the number on a nameplate (with a pop-up after each reply) or on a donut pillow. Turn off "Walk outside chats too" to hide the hound when no chat is open.
@@ -59,6 +69,16 @@ Group chats are supported. The card row shows the name of the character who is s
 실리태번 프롬프트에서 토큰이 어디에 얼마나 들어갔는지 찾아 주는 확장이에요.
 
 프리셋, 캐릭터 카드, 페르소나, 로어북, 확장, 대화 기록이 컨텍스트를 각각 얼마나 썼는지 보여 줘요. 화면에는 흑백 도트 하운드가 함께 있고, 컨텍스트가 찰수록 점점 지쳐요.
+
+<p align="center"><img src="images/moods-ko.png" width="640" alt=""></p>
+
+<table align="center"><tr>
+<td valign="top"><img src="images/ride-ko.png" width="250" alt=""></td>
+<td valign="top"><img src="images/card-ko.png" width="250" alt=""></td>
+<td valign="top"><img src="images/window-ko.png" width="250" alt=""></td>
+</tr></table>
+
+<p align="center"><sub>지어낸 대화로 만든 예시 화면이에요. 실제 화면과 조금 다를 수 있어요.</sub></p>
 
 ### 기능
 
