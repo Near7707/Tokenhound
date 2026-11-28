@@ -16,7 +16,7 @@ Tokenhound shows how much of the context each part of the prompt used: preset, c
 - **Prompt cache hints**: where the prompt first changed since the last turn, for example "new world info entry" or "older messages scrolled out".
 - **Usage reported by the API**: input, cache hit, output, and thinking tokens, when your API reports them.
 - **Reply size**: estimated tokens of the last reply and its thinking part.
-- **Biggest items**, a **trend line**, and a **turn log** for each chat.
+- **Biggest items**, a **trend line**, and a **tracking log** for each chat (a token record left each time you send a message).
 - **Show estimate**: count the next prompt without sending it. Press "Back to normal" to return to the last turn.
 - **Current model and connection profile**. Extension names come from your installed extensions when they can be matched.
 - **Theme**: auto (follows your SillyTavern theme), light, or dark.
@@ -44,8 +44,8 @@ Settings are in **Extensions › Tokenhound**. The ⚙ button in the window has 
 
 - Read-only. Tokenhound doesn't add anything to the prompt, and it doesn't change chats, cards, or other extensions' settings.
 - To read the API usage, it reads a copy of the reply your API sends back to SillyTavern. Nothing is sent anywhere. You can turn this off in the settings.
-- The turn log stores numbers, entry names, and the model name, not your messages. It keeps up to 100 chats.
-- By default the log is also saved as small files in your SillyTavern user files (the same folder as Data Bank uploads), so your PC and phone see the same log. Chat files are not touched. Turn off "Share the turn log between devices" to keep it in this browser only.
+- The tracking log stores numbers, entry names, and the model name, not your messages. It keeps up to 100 chats.
+- By default the log is also saved as small files in your SillyTavern user files (the same folder as Data Bank uploads), so your PC and phone see the same log. Chat files are not touched. Turn off "Share the tracking log between devices" to keep it in this browser only.
 - SillyTavern's Data Maid may list these files (`tokenhound-….json`) as unused. Deleting them only removes the log.
 
 ## Group chats
@@ -70,7 +70,7 @@ Group chats are supported. The card row shows the name of the character who is s
 - **프롬프트 캐시 힌트**: 지난 턴과 비교해서 프롬프트가 처음 바뀐 곳을 알려 줘요. 예를 들면 "새 로어북 항목"이나 "오래된 메시지가 밀려남" 같은 거예요.
 - **API가 알려 준 사용량**: API가 알려 주면 입력, 캐시 적중, 출력, 생각 토큰을 보여 줘요.
 - **답 크기**: 마지막 답과 생각 부분이 몇 토큰인지 예상해서 보여 줘요.
-- **큰 항목 순위**, **추세 그래프**, 채팅방별 **턴 기록**도 있어요.
+- **큰 항목 순위**, **추세 그래프**, 채팅방별 **추적 일지**(메시지를 보낼 때마다 남는 토큰 기록)도 있어요.
 - **예상치 보기**: 보내지 않고 다음 프롬프트를 세 봐요. "원래대로"를 누르면 지난 턴 화면으로 돌아가요.
 - **지금 모델과 연결 프로필**을 보여 줘요. 확장 이름은 설치된 확장 이름과 맞으면 그 이름으로 보여 줘요.
 - **테마**: 자동(실리태번 테마 따라가기) / 라이트 / 다크 중에 고를 수 있어요.
@@ -98,8 +98,8 @@ Group chats are supported. The card row shows the name of the character who is s
 
 - 읽기만 해요. 프롬프트에 아무것도 넣지 않고, 채팅, 캐릭터 카드, 다른 확장 설정도 바꾸지 않아요.
 - API 사용량을 보려고, API가 실리태번에 돌려준 답의 복사본을 읽어요. 아무 데도 보내지 않아요. 설정에서 끌 수 있어요.
-- 턴 기록에는 숫자, 항목 이름, 모델 이름만 저장하고 메시지 내용은 저장하지 않아요. 채팅방 100개까지 남아요.
-- 기본으로 실리태번 사용자 파일 폴더(데이터 뱅크 파일이 들어가는 곳)에도 작은 파일로 저장해요. 그래서 PC와 폰에서 같은 기록을 봐요. 채팅 파일은 건드리지 않아요. "턴 기록을 기기끼리 같이 보기"를 끄면 이 브라우저에만 저장해요.
+- 추적 일지에는 숫자, 항목 이름, 모델 이름만 저장하고 메시지 내용은 저장하지 않아요. 채팅방 100개까지 남아요.
+- 기본으로 실리태번 사용자 파일 폴더(데이터 뱅크 파일이 들어가는 곳)에도 작은 파일로 저장해요. 그래서 PC와 폰에서 같은 기록을 봐요. 채팅 파일은 건드리지 않아요. "추적 일지를 기기끼리 같이 보기"를 끄면 이 브라우저에만 저장해요.
 - 실리태번 데이터 정리 도구(Data Maid)에 이 파일들(`tokenhound-….json`)이 "안 쓰는 파일"로 보일 수 있어요. 지워도 기록만 사라져요.
 
 ### 그룹 채팅
