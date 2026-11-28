@@ -5,13 +5,14 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.25';
+const VERSION = '0.5.26';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
 const MAX_CHATS = 100;
 const SIDE_PREFIX = 'tokenhound:side:';
 const SIDE_MAX = 200; // side calls kept per chat
+const HISTORY_FULL_AT = 0.8; // below this share of the context, missing messages aren't "pushed out"
 const POS_KEY = 'tokenhound:btnpos';
 const HOUSE_POS_KEY = 'tokenhound:housepos';
 const DISPLAYS = ['button', 'walk', 'house', 'menu'];
@@ -556,6 +557,25 @@ let extNamesFrom = -1;
 
 async function loadStExtensions() {
     try { stExt = await import('../../../extensions.js'); } catch { stExt = null; }
+    // SillyTavern's own regex engine (already loaded by SillyTavern; read-only use).
+    try { stRegex = await import('../../regex/engine.js'); } catch { stRegex = null; }
+}
+
+let stRegex = null;
+
+/**
+ * A chat message as SillyTavern puts it into the prompt: "prompt only" regex scripts applied
+ * at the same depth. Falls back to the plain text if the regex engine isn't available.
+ */
+function promptTextOf(m, depth) {
+    const raw = String(m?.mes ?? '');
+    const run = stRegex?.getRegexedString;
+    const place = stRegex?.regex_placement;
+    if (typeof run !== 'function' || !place) return raw;
+    try {
+        const out = run(raw, m.is_user ? place.USER_INPUT : place.AI_OUTPUT, { isPrompt: true, depth });
+        return typeof out === 'string' ? out : raw;
+    } catch { return raw; }
 }
 
 const squashName = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -689,15 +709,26 @@ async function analyze(msgs, cur) {
 
     // Chat history: walk back from the newest message until it stops matching.
     const chat = Array.isArray(c.chat) ? c.chat : [];
-    const visible = [];
+    const core = []; // messages SillyTavern sends (not hidden), in order
     let hidden = 0;
     for (let i = 0; i < chat.length; i++) {
-        if (!chat[i] || !String(chat[i].mes ?? '').trim()) continue;
-        if (chat[i].is_system) hidden++;
-        else visible.push(i);
+        if (!chat[i]) continue;
+        if (chat[i].is_system) { if (String(chat[i].mes ?? '').trim()) hidden++; }
+        else core.push(i);
     }
     // A swipe rewrites the last reply, so that message is not in the prompt on purpose.
-    if (cur?.type === 'swipe' && visible.length && !chat[visible[visible.length - 1]].is_user) visible.pop();
+    if (cur?.type === 'swipe' && core.length && !chat[core[core.length - 1]].is_user) core.pop();
+    // Match each message by the text that actually goes into the prompt ("prompt only" regex).
+    const tail = cur?.type === 'continue' ? 2 : 1;
+    const visible = [];
+    const promptText = new Map();
+    core.forEach((i, idx) => {
+        if (!String(chat[i].mes ?? '').trim()) return;
+        const text = promptTextOf(chat[i], core.length - idx - tail);
+        if (!text.trim()) return; // regex removed all of it: nothing goes in
+        promptText.set(i, text);
+        visible.push(i);
+    });
     let inc = 0;
     let misses = 0;
     let histStart = Infinity;
@@ -707,7 +738,9 @@ async function analyze(msgs, cur) {
     const sourceMsgs = new Set(spots.map(x => x.msg));
     for (let j = visible.length - 1; j >= 0; j--) {
         const m = chat[visible[j]];
-        let at = loc.find(m.mes, true, true);
+        const text = promptText.get(visible[j]);
+        let at = loc.find(text, true, true);
+        if (!at && text !== m.mes) at = loc.find(m.mes, true, true);
         // In chat completion, a history message can't be one of the sections found above,
         // and history runs in order (older messages sit earlier in the prompt).
         if (at && texts.length > 1 && (sourceMsgs.has(at.msg) || at.msg > lastHistMsg)) at = null;
@@ -717,7 +750,7 @@ async function analyze(msgs, cur) {
             misses = 0;
             histStart = Math.min(histStart, at.msg);
             if (texts.length > 1) usedMsgs.add(at.msg);
-            else histTokSum += await count(m.mes);
+            else histTokSum += await count(text);
         } else {
             misses++;
             if (misses >= (inc ? 3 : 6)) break;
@@ -1361,7 +1394,11 @@ function partsHtml(rec, prev, isOpen, keyOf) {
         }
         if (k === 'history') {
             const cut = Math.max(0, (rec.hist?.all || 0) - (rec.hist?.inc || 0));
-            if (cut) html += `<div class="th-sub th-warntext">${esc(t('history_cut', { n: cut }))}</div>`;
+            // Old messages only get pushed out when the context is close to full. With plenty
+            // of room left, a missing message was most likely just changed on its way in.
+            const roomy = rec.max > 0 && (rec.total + (rec.reply || 0)) < rec.max * HISTORY_FULL_AT;
+            if (cut && !roomy) html += `<div class="th-sub th-warntext">${esc(t('history_cut', { n: cut }))}</div>`;
+            else if (cut) html += `<div class="th-sub th-muted">${esc(t('history_miss', { n: cut }))}</div>`;
             if (rec.hist?.hidden) html += `<div class="th-sub th-muted">${esc(t('history_hidden', { n: rec.hist.hidden }))}</div>`;
         }
     }
