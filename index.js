@@ -5,7 +5,7 @@ import { STRINGS } from './i18n.js';
 import { houndSvg, houndPartSvg, houseLayersSvg } from './sprites.js';
 
 const MODULE = 'tokenhound';
-const VERSION = '0.5.26';
+const VERSION = '0.5.27';
 const LOG_PREFIX = 'tokenhound:log:';
 const LOG_INDEX = 'tokenhound:index';
 const LOG_FORMAT = 1;
@@ -526,12 +526,13 @@ function makeLocator(texts) {
     };
     return {
         norm,
-        find(text, fromEnd = false, strict = false) {
+        find(text, fromEnd = false, strict = false, accept = null) {
             const probes = probesOf(text);
             if (!probes.length) return null;
             const order = [...norm.keys()];
             if (fromEnd) order.reverse();
             for (const i of order) {
+                if (accept && !accept(i)) continue;
                 if (strict && probes.length === 3) {
                     // Start matches, or both middle and end match in the same message.
                     const a = norm[i].indexOf(probes[0]);
@@ -724,7 +725,9 @@ async function analyze(msgs, cur) {
     const promptText = new Map();
     core.forEach((i, idx) => {
         if (!String(chat[i].mes ?? '').trim()) return;
-        const text = promptTextOf(chat[i], core.length - idx - tail);
+        let text = promptTextOf(chat[i], core.length - idx - tail);
+        // SillyTavern fills the first message's macros ({{user}} etc.) on the way in.
+        if (i === 0 && text.includes('{{')) { try { text = String(c.substituteParams?.(text) ?? text); } catch { /* keep */ } }
         if (!text.trim()) return; // regex removed all of it: nothing goes in
         promptText.set(i, text);
         visible.push(i);
@@ -739,11 +742,12 @@ async function analyze(msgs, cur) {
     for (let j = visible.length - 1; j >= 0; j--) {
         const m = chat[visible[j]];
         const text = promptText.get(visible[j]);
-        let at = loc.find(text, true, true);
-        if (!at && text !== m.mes) at = loc.find(m.mes, true, true);
         // In chat completion, a history message can't be one of the sections found above,
-        // and history runs in order (older messages sit earlier in the prompt).
-        if (at && texts.length > 1 && (sourceMsgs.has(at.msg) || at.msg > lastHistMsg)) at = null;
+        // and history runs in order (older messages sit earlier in the prompt). Only look
+        // there, so a very short message ("ok") isn't "found" in a later section and dropped.
+        const fits = texts.length > 1 ? (i => !sourceMsgs.has(i) && i <= lastHistMsg) : null;
+        let at = loc.find(text, true, true, fits);
+        if (!at && text !== m.mes) at = loc.find(m.mes, true, true, fits);
         if (at) {
             lastHistMsg = at.msg;
             inc++;
